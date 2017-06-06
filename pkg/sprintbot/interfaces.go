@@ -17,3 +17,8 @@ type IssueState interface {
 type RepoChecker interface {
 	PRReviewed(prURL string) (bool, error)
 }
+
+type ChatCMD interface {
+	Action() string
+	User() string
+}

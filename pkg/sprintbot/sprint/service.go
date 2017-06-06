@@ -5,6 +5,11 @@ import (
 	"github.com/pkg/errors"
 )
 
+const (
+	// CommandNext is the command sent from the chat server to find out whats next in the sprint
+	CommandNext = "next"
+)
+
 // Service handles the buisness logic around sprint actions
 type Service struct {
 	issueFinder sprintbot.IssueFinder
