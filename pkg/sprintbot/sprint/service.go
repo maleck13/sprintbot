@@ -1,8 +1,6 @@
 package sprint
 
 import (
-	"fmt"
-
 	"github.com/maleck13/sprintbot/pkg/sprintbot"
 	"github.com/pkg/errors"
 )
@@ -32,7 +30,6 @@ func NewService(issueFinder sprintbot.IssueFinder, repoChecker sprintbot.RepoChe
 
 // Next will look at the current sprint and figure out what should be the next action
 func (s *Service) Next() (*sprintbot.NextIssues, error) {
-	fmt.Println("Next")
 	if s.boardName == "" || s.sprintName == "" {
 		return nil, &sprintbot.ErrInvalid{Message: "expected a board name and sprint name but did not get them boardName: " + s.boardName + " sprintName: " + s.boardName}
 	}
@@ -45,7 +42,6 @@ func (s *Service) Next() (*sprintbot.NextIssues, error) {
 	if len(issues) == 0 {
 		return &sprintbot.NextIssues{Issues: issues, Message: "nothing to do?"}, nil
 	}
-	fmt.Println("issues found ", len(issues), issues[0].State())
 	// check for PR sent and not reviewed PRs
 	var awaitingPR = []sprintbot.IssueState{}
 	for _, i := range issues {

@@ -22,3 +22,4 @@ docker build -t sprintbot:latest .
 
 next start rocket chat
 
+... TODO go through setup of webhook and linking the bot
