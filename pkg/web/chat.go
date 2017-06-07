@@ -4,17 +4,20 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/maleck13/sprintbot/pkg/sprintbot"
 	"github.com/maleck13/sprintbot/pkg/sprintbot/usecase"
 )
 
 type ChatHandler struct {
-	chat *usecase.Chat
+	chat   *usecase.Chat
+	logger *logrus.Logger
 }
 
-func NewChatHandler(chatUseCase *usecase.Chat) *ChatHandler {
+func NewChatHandler(chatUseCase *usecase.Chat, logger *logrus.Logger) *ChatHandler {
 	return &ChatHandler{
-		chat: chatUseCase,
+		chat:   chatUseCase,
+		logger: logger,
 	}
 }
 
@@ -50,8 +53,9 @@ func (ch *ChatHandler) IncomingMessage(rw http.ResponseWriter, req *http.Request
 }
 
 func handleChatError(err error, rw http.ResponseWriter) {
+
 	switch err.(type) {
-	case *sprintbot.ErrUnkownCMD:
+	case *sprintbot.ErrUnkownCMD, *sprintbot.ErrInvalid:
 		http.Error(rw, err.Error(), http.StatusBadRequest)
 		return
 	default:

@@ -5,11 +5,11 @@ type Chatter interface {
 }
 
 type IssueFinder interface {
-	FindUnresolved() (*IssueList, error)
+	FindUnresolvedOnBoard(boardName, sprint string) (*IssueList, error)
 }
 
 type IssueState interface {
-	PR() string
+	PRS() []string
 	Link() string
 	State() string
 }

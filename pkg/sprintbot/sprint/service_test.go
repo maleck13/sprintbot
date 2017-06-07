@@ -12,7 +12,7 @@ type mockIssueFinder struct {
 	err    error
 }
 
-func (mf *mockIssueFinder) FindUnresolved() (*sprintbot.IssueList, error) {
+func (mf *mockIssueFinder) FindUnresolvedOnBoard(boardName, sprint string) (*sprintbot.IssueList, error) {
 	var ret = make([]sprintbot.IssueState, len(mf.issues))
 	for i, d := range mf.issues {
 		ret[i] = d
@@ -26,8 +26,10 @@ type mockRepoChecker struct {
 
 func (mrc *mockRepoChecker) PRReviewed(prURL string) (bool, error) {
 	for _, i := range mrc.issues {
-		if i.PR() == prURL {
-			return i.prReviewed, nil
+		for _, pr := range i.PRS() {
+			if pr == prURL {
+				return i.prReviewed, nil
+			}
 		}
 	}
 	return false, nil
@@ -40,8 +42,8 @@ type mockIssue struct {
 	state      string
 }
 
-func (mi mockIssue) PR() string {
-	return mi.pr
+func (mi mockIssue) PRS() []string {
+	return []string{mi.pr}
 }
 func (mi mockIssue) Link() string {
 	return mi.link
@@ -100,7 +102,7 @@ func TestSprintNext(t *testing.T) {
 			err:    tc.Err,
 		}
 		rc := &mockRepoChecker{issues: tc.Issues}
-		service := sprint.NewService(isf, rc)
+		service := sprint.NewService(isf, rc, "testBoard", "testSprint")
 		t.Run(tc.Name, func(t *testing.T) {
 			ni, err := service.Next()
 			if tc.ExpectError && err == nil {

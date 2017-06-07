@@ -5,7 +5,14 @@ import (
 	"fmt"
 	"net/http"
 
+	"os"
+
 	"github.com/Sirupsen/logrus"
+	"github.com/maleck13/sprintbot/pkg/github"
+	"github.com/maleck13/sprintbot/pkg/jira"
+	"github.com/maleck13/sprintbot/pkg/sprintbot"
+	"github.com/maleck13/sprintbot/pkg/sprintbot/sprint"
+	"github.com/maleck13/sprintbot/pkg/sprintbot/usecase"
 	"github.com/maleck13/sprintbot/pkg/web"
 	"github.com/spf13/viper"
 )
@@ -17,10 +24,9 @@ var (
 	jiraHost    string
 	jiraUser    string
 	jiraPass    string
+	jiraBoard   string
+	jiraSprint  string
 	gitHubToken string
-	rocketHost  string
-	rocketUser  string
-	rocketPass  string
 	configLoc   string
 )
 
@@ -43,6 +49,10 @@ func main() {
 	viper.AddConfigPath("../../")
 	viper.AddConfigPath("/etc/sprintbot")
 	viper.AddConfigPath("./")
+	viper.SetEnvPrefix("SB")
+	viper.AutomaticEnv()
+	viper.BindEnv("jira_board")
+	viper.BindEnv("jira_sprint")
 	err := viper.ReadInConfig() // Find and read the config file
 	if err != nil {             // Handle errors reading the config file
 		panic(fmt.Errorf("Fatal error config file: %s \n", err))
@@ -50,12 +60,31 @@ func main() {
 	flag.StringVar(&logLevel, "log-level", "info", "use this to set log level: error, info, debug")
 	flag.StringVar(&port, "port", "3000", "set the port to listen on. e.g 3000")
 	flag.StringVar(&configLoc, "config-loc", "/etc/sprintbot", "the dir where to find the config")
+	flag.StringVar(&jiraHost, "jira-host", "", "sets the jira host to use")
+	flag.StringVar(&jiraUser, "jira-user", "", "sets the jira user")
+	flag.StringVar(&jiraPass, "jira-pass", "", "sets the jira password")
+
 	flag.Parse()
 	logger = setupLogger()
 	router := web.BuildRouter()
+	target := &sprintbot.Target{
+		Host:     jiraHost,
+		UserName: jiraUser,
+		Password: jiraPass,
+	}
+	gitClient := &github.Client{}
+	issueClient := jira.NewClient(target)
+	_, err = issueClient.Login()
+	if err != nil {
+		logger.Fatalf("failed login to Jira %s ", err)
+	}
 	//chat route
 	{
-		web.ChatRoute(router)
+		fmt.Println("sprint set to ", viper.GetString("jira_sprint"), os.Getenv("SB_JIRA_SPRINT"))
+		sprintService := sprint.NewService(issueClient, gitClient,
+			viper.GetString("jira_board"), viper.GetString("jira_sprint"))
+		chatUseCase := usecase.NewChat(sprintService)
+		web.ChatRoute(router, chatUseCase, logger)
 	}
 
 	//http handler

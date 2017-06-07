@@ -3,8 +3,10 @@ package web
 import (
 	"net/http"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/codegangsta/negroni"
 	"github.com/gorilla/mux"
+	"github.com/maleck13/sprintbot/pkg/sprintbot/usecase"
 	"github.com/rs/cors"
 )
 
@@ -31,7 +33,7 @@ func BuildHTTPHandler(r *mux.Router) http.Handler {
 	return n
 }
 
-func ChatRoute(r *mux.Router) {
-	chatHandler := &ChatHandler{}
+func ChatRoute(r *mux.Router, cu *usecase.Chat, logger *logrus.Logger) {
+	chatHandler := NewChatHandler(cu, logger)
 	r.HandleFunc("/chat/message", chatHandler.IncomingMessage).Methods("POST")
 }
