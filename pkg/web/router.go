@@ -33,7 +33,7 @@ func BuildHTTPHandler(r *mux.Router) http.Handler {
 	return n
 }
 
-func ChatRoute(r *mux.Router, cu *usecase.Chat, logger *logrus.Logger) {
-	chatHandler := NewChatHandler(cu, logger)
+func ChatRoute(r *mux.Router, cu *usecase.Chat, logger *logrus.Logger, auth string) {
+	chatHandler := NewChatHandler(cu, logger, auth)
 	r.HandleFunc("/chat/message", chatHandler.IncomingMessage).Methods("POST")
 }

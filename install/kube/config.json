@@ -1,0 +1,16 @@
+{
+  "apiVersion": "v1",
+  "kind": "ConfigMap",
+  "metadata":{
+      "name":"config"
+  },
+  "data":{
+      "jira_host":"${JIRA_HOST}",
+      "jira_pass":"${JIRA_PASS}",
+      "jira_user":"${JIRA_USER}",
+      "jira_sprint":"${JIRA_SPRINT}",
+      "jira_board":"${JIRA_BOARD}",
+      "github_token":"${GITHUB_TOKEN}",
+      "rocket_token":"${ROCKET_TOKEN}"
+  }
+}

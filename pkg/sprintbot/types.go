@@ -278,8 +278,12 @@ func (ji *JiraIssue) PRS() []string {
 	return ji.Fields.Customfield12310220
 }
 
-func (ji *JiraIssue) Link() string {
-	return ji.Self
+func (ji *JiraIssue) Link(host string) string {
+	return host + "/browse/" + ji.Key
+}
+
+func (ji *JiraIssue) Description() string {
+	return ji.Fields.Summary
 }
 
 func (ji *JiraIssue) State() string {
@@ -311,11 +315,26 @@ func (rcmd *RocketChatCmd) User() string {
 	return rcmd.UserName
 }
 
+func (rcmd *RocketChatCmd) AuthToken() string {
+	return rcmd.Token
+}
+
+type Sprint struct {
+	Name  string
+	Board string
+}
+
 type ChatResponse struct{}
 
 type NextIssues struct {
 	Message string
-	Issues  []IssueState
+	Issues  []*Issue
+}
+
+type Issue struct {
+	Link        string
+	PRs         []string
+	Description string
 }
 
 type IssueList struct {
@@ -345,6 +364,7 @@ func (il *IssueList) FindInState(state string) *IssueList {
 const (
 	IssueStateReadyForQA = "Ready for QA"
 	IssueStateOpen       = "Open"
+	IssueStateClosed     = "Closed"
 )
 
 type ErrUnkownCMD struct {

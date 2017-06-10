@@ -27,6 +27,7 @@ var (
 	jiraBoard   string
 	jiraSprint  string
 	gitHubToken string
+	rocketToken string
 	configLoc   string
 )
 
@@ -53,6 +54,11 @@ func main() {
 	viper.AutomaticEnv()
 	viper.BindEnv("jira_board")
 	viper.BindEnv("jira_sprint")
+	viper.BindEnv("jira_user")
+	viper.BindEnv("jira_pass")
+	viper.BindEnv("github_token")
+	viper.BindEnv("rocket_token")
+
 	err := viper.ReadInConfig() // Find and read the config file
 	if err != nil {             // Handle errors reading the config file
 		panic(fmt.Errorf("Fatal error config file: %s \n", err))
@@ -63,6 +69,8 @@ func main() {
 	flag.StringVar(&jiraHost, "jira-host", "", "sets the jira host to use")
 	flag.StringVar(&jiraUser, "jira-user", "", "sets the jira user")
 	flag.StringVar(&jiraPass, "jira-pass", "", "sets the jira password")
+	flag.StringVar(&gitHubToken, "github-token", "", "sets the github token")
+	flag.StringVar(&rocketToken, "rocket-token", "", "sets the rocket chat auth token")
 
 	flag.Parse()
 	logger = setupLogger()
@@ -72,7 +80,7 @@ func main() {
 		UserName: jiraUser,
 		Password: jiraPass,
 	}
-	gitClient := &github.Client{}
+	gitClient := github.NewClient(gitHubToken)
 	issueClient := jira.NewClient(target)
 	_, err = issueClient.Login()
 	if err != nil {
@@ -81,10 +89,11 @@ func main() {
 	//chat route
 	{
 		fmt.Println("sprint set to ", viper.GetString("jira_sprint"), os.Getenv("SB_JIRA_SPRINT"))
-		sprintService := sprint.NewService(issueClient, gitClient,
-			viper.GetString("jira_board"), viper.GetString("jira_sprint"))
+		sp := &sprintbot.Sprint{Name: viper.GetString("jira_sprint"), Board: viper.GetString("jira_board")}
+		sprintService := sprint.NewService(issueClient, gitClient, sp)
+		sprintService.IgnoredRepos = []string{"RHMAPDocsNG", "fhcap", "fh-openshift-templates", "fh-core-openshift-templates"}
 		chatUseCase := usecase.NewChat(sprintService)
-		web.ChatRoute(router, chatUseCase, logger)
+		web.ChatRoute(router, chatUseCase, logger, viper.GetString("rocket_token"))
 	}
 
 	//http handler

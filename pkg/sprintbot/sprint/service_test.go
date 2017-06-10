@@ -1,7 +1,10 @@
 package sprint_test
 
 import (
+	"strings"
 	"testing"
+
+	"fmt"
 
 	"github.com/maleck13/sprintbot/pkg/sprintbot"
 	"github.com/maleck13/sprintbot/pkg/sprintbot/sprint"
@@ -33,6 +36,15 @@ func (mrc *mockRepoChecker) PRReviewed(prURL string) (bool, error) {
 		}
 	}
 	return false, nil
+}
+func (mrc *mockRepoChecker) Repo(pURL string) string {
+	parts := strings.Split(pURL, "/")
+	fmt.Println(len(parts))
+	//2,3,4
+	if len(parts) < 7 {
+		return ""
+	}
+	return parts[4]
 }
 
 type mockIssue struct {
@@ -77,6 +89,15 @@ func TestSprintNext(t *testing.T) {
 			Err: nil,
 		},
 		{
+			Name:        "should not find and return pr issues for ignored repo",
+			ExpectError: false,
+			NumIssues:   0,
+			Issues: []mockIssue{
+				mockIssue{pr: "https://gitlab.cee.redhat.com/red-hat-mobile-application-platform-documentation/RHMAPDocsNG/merge_requests/181", link: "http://jira.com", prReviewed: false, state: sprintbot.IssueStateClosed},
+			},
+			Err: nil,
+		},
+		{
 			Name:        "should find and return ready for qe  issues",
 			ExpectError: false,
 			NumIssues:   1,
@@ -102,7 +123,9 @@ func TestSprintNext(t *testing.T) {
 			err:    tc.Err,
 		}
 		rc := &mockRepoChecker{issues: tc.Issues}
-		service := sprint.NewService(isf, rc, "testBoard", "testSprint")
+		s := sprintbot.Sprint{Name: "testSprint", Board: "testBoard"}
+		service := sprint.NewService(isf, rc, &s)
+		service.IgnoredRepos = []string{"RHMAPDocsNG", "fhcap", "fh-openshift-templates", "fh-core-openshift-templates"}
 		t.Run(tc.Name, func(t *testing.T) {
 			ni, err := service.Next()
 			if tc.ExpectError && err == nil {

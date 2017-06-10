@@ -4,20 +4,24 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"fmt"
+
 	"github.com/Sirupsen/logrus"
 	"github.com/maleck13/sprintbot/pkg/sprintbot"
 	"github.com/maleck13/sprintbot/pkg/sprintbot/usecase"
 )
 
 type ChatHandler struct {
-	chat   *usecase.Chat
-	logger *logrus.Logger
+	chat      *usecase.Chat
+	logger    *logrus.Logger
+	authToken string
 }
 
-func NewChatHandler(chatUseCase *usecase.Chat, logger *logrus.Logger) *ChatHandler {
+func NewChatHandler(chatUseCase *usecase.Chat, logger *logrus.Logger, auth string) *ChatHandler {
 	return &ChatHandler{
-		chat:   chatUseCase,
-		logger: logger,
+		chat:      chatUseCase,
+		logger:    logger,
+		authToken: auth,
 	}
 }
 
@@ -39,6 +43,11 @@ func (ch *ChatHandler) IncomingMessage(rw http.ResponseWriter, req *http.Request
 	}
 	if err := decoder.Decode(chatCMD); err != nil {
 		http.Error(rw, "failed decoding incoming message. "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	fmt.Println("auth set to " + ch.authToken)
+	if ch.authToken != chatCMD.AuthToken() {
+		http.Error(rw, "not authorised", http.StatusUnauthorized)
 		return
 	}
 	chatResp, err := ch.chat.Handle(chatCMD)

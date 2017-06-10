@@ -1,0 +1,16 @@
+{
+    "jira":{
+        "host":"https://jira.mine.com",
+        "user":"myuser",
+        "pass":"mypass"
+    },
+    "rocket":{
+        "host":"https://rocket.mine.com",
+        "user":"rocketuser",
+        "pass":"rocketpass"
+    },
+    "github":{
+        "host":"https://github.com",
+        "token":"supersecret"
+    }
+}

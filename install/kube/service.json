@@ -1,0 +1,23 @@
+{
+    "apiVersion": "v1",
+    "kind": "Service",
+    "metadata": {
+        "creationTimestamp": null,
+        "labels": {
+            "run": "sprintbot"
+        },
+        "name": "sprintbot"
+    },
+    "spec": {
+        "ports": [
+            {
+                "name": "api",
+                "port": 3000,
+                "targetPort": 3000
+            }
+        ],
+        "selector": {
+            "name": "sprintbot"
+        }
+    }
+}

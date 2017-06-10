@@ -21,7 +21,8 @@ func NewClient(t *sprintbot.Target) *Client {
 }
 
 type Client struct {
-	target *sprintbot.Target
+	target      *sprintbot.Target
+	failedLogin int
 }
 
 func (c *Client) headers(req *http.Request) {
@@ -33,6 +34,10 @@ func (c *Client) configure() http.Client {
 	client := http.Client{}
 	client.Timeout = time.Second * 15
 	return client
+}
+
+func (c *Client) IssueHost() string {
+	return c.target.Host
 }
 
 func (c *Client) FindUnresolvedOnBoard(boardName, sprint string) (*sprintbot.IssueList, error) {
@@ -66,7 +71,11 @@ func (c *Client) FindUnresolvedOnBoard(boardName, sprint string) (*sprintbot.Iss
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		return nil, errors.New("Not authenticated with Jira statusCode: " + resp.Status)
+		_, err := c.Login()
+		if err != nil {
+			return nil, err
+		}
+		return c.FindUnresolvedOnBoard(boardName, sprint)
 	}
 	if resp.StatusCode > 300 {
 		return nil, errors.New("Unexpected Jira statusCode: " + resp.Status)
@@ -116,6 +125,9 @@ func (c *Client) Boards(filter string) (*sprintbot.BoardList, error) {
 }
 
 func (c *Client) Login() (*sprintbot.Auth, error) {
+	if c.failedLogin > 3 {
+		return nil, errors.New("failed to login to Jira with credentials ")
+	}
 	login := `{"username":"` + c.target.UserName + `","password":"` + c.target.Password + `"}`
 	authURL := fmt.Sprintf("%s/%s", c.target.Host, "rest/auth/1/session")
 	req, err := http.NewRequest("POST", authURL, strings.NewReader(login))
@@ -131,11 +143,14 @@ func (c *Client) Login() (*sprintbot.Auth, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		c.failedLogin++
 		return nil, errors.New("failed to authenticate with Jira statusCode: " + resp.Status)
 	}
 	if resp.StatusCode != 200 {
+		c.failedLogin++
 		return nil, errors.New("failed to authenticate : " + resp.Status)
 	}
+	c.failedLogin = 0
 	decoder := json.NewDecoder(resp.Body)
 	if err := decoder.Decode(authRes); err != nil {
 		return nil, errors.Wrap(err, "failed to decode auth response from jira ")

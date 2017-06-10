@@ -1,0 +1,100 @@
+{
+  "apiVersion": "apps/v1beta1",
+  "kind": "Deployment",
+  "metadata": {
+    "labels": {
+      "run": "sprintbot",
+      "name": "sprintbot"
+    },
+    "name": "sprintbot"
+  },
+  "spec": {
+    "replicas": 1,
+    "template": {
+      "metadata": {
+        "creationTimestamp": null,
+        "labels": {
+          "run": "sprintbot",
+          "name":"sprintbot"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "env":[{
+                "name":"SB_JIRA_HOST",
+                "valueFrom":{
+                    "configMapKeyRef":{
+                        "name":"config",
+                        "key":"jira_host"
+                    }
+                }
+            } ,{
+                "name":"SB_JIRA_USER",
+                "valueFrom":{
+                    "configMapKeyRef":{
+                        "name":"config",
+                        "key":"jira_user"
+                    }
+                }
+            } ,{
+                "name":"SB_JIRA_PASS",
+                "valueFrom":{
+                    "configMapKeyRef":{
+                        "name":"config",
+                        "key":"jira_pass"
+                    }
+                }
+            },
+            {
+                "name":"SB_JIRA_SPRINT",
+                "valueFrom":{
+                    "configMapKeyRef":{
+                        "name":"config",
+                        "key":"jira_sprint"
+                    }
+                }
+            } ,
+            {
+                "name":"SB_JIRA_BOARD",
+                "valueFrom":{
+                    "configMapKeyRef":{
+                        "name":"config",
+                        "key":"jira_board"
+                    }
+                }
+            },
+            {
+                "name":"SB_GITHUB_TOKEN",
+                "valueFrom":{
+                    "configMapKeyRef":{
+                        "name":"config",
+                        "key":"github_token"
+                    }
+                }
+            },
+            {
+                "name":"SB_ROCKET_TOKEN",
+                "valueFrom":{
+                    "configMapKeyRef":{
+                        "name":"config",
+                        "key":"rocket_token"
+                    }
+                }
+            }  
+            ],
+            "image": "maleck13/sprintbot-server:1.0.0",
+            "imagePullPolicy": "Always",
+            "name": "sprintbot-server",
+            "resources": {},
+            "terminationMessagePath": "/dev/termination-log"
+          }
+        ],
+        "dnsPolicy": "ClusterFirst",
+        "restartPolicy": "Always",
+        "securityContext": {},
+        "terminationGracePeriodSeconds": 30
+      }
+    }
+  }
+}
