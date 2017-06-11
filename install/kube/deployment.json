@@ -83,7 +83,7 @@
                 }
             }  
             ],
-            "image": "maleck13/sprintbot-server:1.0.0",
+            "image": "maleck13/sprintbot:latest",
             "imagePullPolicy": "Always",
             "name": "sprintbot-server",
             "resources": {},

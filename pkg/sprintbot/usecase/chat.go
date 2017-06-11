@@ -30,6 +30,8 @@ func (ch *Chat) Handle(cmd sprintbot.ChatCMD) (*sprintbot.NextIssues, error) {
 	default:
 		return nil, &sprintbot.ErrUnkownCMD{Message: "the command " + cmd.Action() + " is not something I can do"}
 	}
-	resp.Message = fmt.Sprintf("@%s %s", cmd.User(), resp.Message)
+	if nil != resp {
+		resp.Message = fmt.Sprintf("@%s %s", cmd.User(), resp.Message)
+	}
 	return resp, err
 }

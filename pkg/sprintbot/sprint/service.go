@@ -1,6 +1,9 @@
 package sprint
 
 import (
+	"time"
+
+	"github.com/Sirupsen/logrus"
 	"github.com/maleck13/sprintbot/pkg/sprintbot"
 	"github.com/pkg/errors"
 )
@@ -12,17 +15,21 @@ const (
 
 // Service handles the buisness logic around sprint actions
 type Service struct {
+	logger       *logrus.Logger
 	issueFinder  sprintbot.IssueFinder
 	repoChecker  sprintbot.RepoChecker
 	boardName    string
 	sprintName   string
 	IgnoredRepos []string
+	issueRepo    sprintbot.IssueRepo
 }
 
 // NewService returns a new  instance of the sprint service
-func NewService(issueFinder sprintbot.IssueFinder, repoChecker sprintbot.RepoChecker, sp *sprintbot.Sprint) *Service {
+func NewService(issueFinder sprintbot.IssueFinder, repoChecker sprintbot.RepoChecker, issueRepo sprintbot.IssueRepo, sp *sprintbot.Sprint, logger *logrus.Logger) *Service {
 	return &Service{
+		logger:       logger,
 		issueFinder:  issueFinder,
+		issueRepo:    issueRepo,
 		repoChecker:  repoChecker,
 		sprintName:   sp.Name,
 		boardName:    sp.Board,
@@ -53,6 +60,8 @@ func (s *Service) awaitingPrReview(issues []sprintbot.IssueState) ([]sprintbot.I
 			}
 			if !is {
 				awaitingPR = append(awaitingPR, i)
+			} else {
+				i.RemovePR(pr)
 			}
 		}
 	}
@@ -71,40 +80,83 @@ func (s *Service) buildIssues(is []sprintbot.IssueState) []*sprintbot.Issue {
 	return next
 }
 
-// Next will look at the current sprint and figure out what should be the next action
-func (s *Service) Next() (*sprintbot.NextIssues, error) {
+// Sync runs a sync of what to do next based on a timer
+func (s *Service) Sync(syncEvery time.Duration, stop chan struct{}) {
+	t := time.NewTicker(syncEvery)
+	i := time.After(1 * time.Second)
+	for {
+		select {
+		case <-i:
+			s.logger.Info("starting first issue sync")
+			if err := s.sync(); err != nil {
+				s.logger.Errorf("syncing issues from sprint failed %s", err)
+			}
+			s.logger.Info("finished first issue sync")
+		case <-t.C:
+			s.logger.Info("starting issue sync")
+			if err := s.sync(); err != nil {
+				s.logger.Errorf("syncing issues from sprint failed %s", err)
+			}
+			s.logger.Info("finished issue sync")
+		case <-stop:
+			s.logger.Info("shutting down sprint sync")
+			return
+		}
+	}
+}
+
+func (s *Service) sync() error {
 	if s.boardName == "" || s.sprintName == "" {
-		return nil, &sprintbot.ErrInvalid{Message: "expected a board name and sprint name but did not get them boardName: " + s.boardName + " sprintName: " + s.boardName}
+		return errors.New("expected a board name and sprint name but did not get them boardName: " + s.boardName + " sprintName: " + s.boardName)
 	}
 	var next = []*sprintbot.Issue{}
 	// retreive  all non closed issues
 	issueList, err := s.issueFinder.FindUnresolvedOnBoard(s.boardName, s.sprintName)
 	if err != nil {
-		return nil, errors.Wrap(err, "sprint service finding next failed to find unresolved issues ")
+		return errors.Wrap(err, "sprint service finding next failed to find unresolved issues ")
 	}
 	issues := issueList.Issues()
 	if len(issues) == 0 {
-		return &sprintbot.NextIssues{Issues: s.buildIssues(issues), Message: "nothing to do?"}, nil
+		next := &sprintbot.NextIssues{Issues: s.buildIssues(issues), Message: "nothing to do?"}
+		return s.issueRepo.SaveNext(next)
 	}
 	// check for PR sent and not reviewed PRs
 	awaitingPR, err := s.awaitingPrReview(issues)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if len(awaitingPR) > 0 {
-		return &sprintbot.NextIssues{Issues: s.buildIssues(awaitingPR), Message: "There are some outstanding PRs on these issues."}, nil
+		next := &sprintbot.NextIssues{Issues: s.buildIssues(awaitingPR), Message: "There are some outstanding PRs on these issues."}
+		return s.issueRepo.SaveNext(next)
 	}
 	// if none check for ready for qe but not qe in progress or PR sent where the pr has been reviewed
 	rqaissueList := issueList.FindInState(sprintbot.IssueStateReadyForQA)
 	issues = rqaissueList.Issues()
 	if len(issues) > 0 {
-		return &sprintbot.NextIssues{Issues: s.buildIssues(issues), Message: "The following issues are in a " + sprintbot.IssueStateReadyForQA + " state."}, nil
+		next := &sprintbot.NextIssues{Issues: s.buildIssues(issues), Message: "The following issues are in a " + sprintbot.IssueStateReadyForQA + " state."}
+		return s.issueRepo.SaveNext(next)
 	}
 	//if none look for the next available issue
 	issueList = issueList.FindInState(sprintbot.IssueStateOpen)
 	issues = issueList.Issues()
 	if len(issues) > 0 {
-		return &sprintbot.NextIssues{Issues: s.buildIssues(issues), Message: "The following issues are in a " + sprintbot.IssueStateOpen + " state"}, nil
+		next := &sprintbot.NextIssues{Issues: s.buildIssues(issues), Message: "The following issues are in a " + sprintbot.IssueStateOpen + " state"}
+		return s.issueRepo.SaveNext(next)
 	}
-	return &sprintbot.NextIssues{Issues: next, Message: "Looks like there is nothing to do?"}, nil
+	nextIss := &sprintbot.NextIssues{Issues: next, Message: "Looks like there is nothing to do?"}
+	return s.issueRepo.SaveNext(nextIss)
+
+}
+
+// Next will look at the current sprint and figure out what should be the next action
+func (s *Service) Next() (*sprintbot.NextIssues, error) {
+	if s.boardName == "" || s.sprintName == "" {
+		return nil, &sprintbot.ErrInvalid{Message: "expected a board name and sprint name but did not get them boardName: " + s.boardName + " sprintName: " + s.boardName}
+	}
+	var next *sprintbot.NextIssues
+	next, err := s.issueRepo.FindNext()
+	if err != nil {
+		return nil, errors.Wrap(err, "Sprint next failed to find next issues from issueRepo ")
+	}
+	return next, nil
 }

@@ -7,7 +7,10 @@ import (
 
 	"os"
 
+	"time"
+
 	"github.com/Sirupsen/logrus"
+	"github.com/maleck13/sprintbot/pkg/bolt"
 	"github.com/maleck13/sprintbot/pkg/github"
 	"github.com/maleck13/sprintbot/pkg/jira"
 	"github.com/maleck13/sprintbot/pkg/sprintbot"
@@ -46,54 +49,57 @@ func setupLogger() *logrus.Logger {
 }
 
 func main() {
-	viper.SetConfigName("config")
-	viper.AddConfigPath("../../")
-	viper.AddConfigPath("/etc/sprintbot")
-	viper.AddConfigPath("./")
 	viper.SetEnvPrefix("SB")
 	viper.AutomaticEnv()
 	viper.BindEnv("jira_board")
 	viper.BindEnv("jira_sprint")
 	viper.BindEnv("jira_user")
 	viper.BindEnv("jira_pass")
+	viper.BindEnv("jira_host")
 	viper.BindEnv("github_token")
 	viper.BindEnv("rocket_token")
 
-	err := viper.ReadInConfig() // Find and read the config file
-	if err != nil {             // Handle errors reading the config file
-		panic(fmt.Errorf("Fatal error config file: %s \n", err))
-	}
 	flag.StringVar(&logLevel, "log-level", "info", "use this to set log level: error, info, debug")
 	flag.StringVar(&port, "port", "3000", "set the port to listen on. e.g 3000")
 	flag.StringVar(&configLoc, "config-loc", "/etc/sprintbot", "the dir where to find the config")
-	flag.StringVar(&jiraHost, "jira-host", "", "sets the jira host to use")
-	flag.StringVar(&jiraUser, "jira-user", "", "sets the jira user")
-	flag.StringVar(&jiraPass, "jira-pass", "", "sets the jira password")
 	flag.StringVar(&gitHubToken, "github-token", "", "sets the github token")
 	flag.StringVar(&rocketToken, "rocket-token", "", "sets the rocket chat auth token")
-
 	flag.Parse()
 	logger = setupLogger()
 	router := web.BuildRouter()
 	target := &sprintbot.Target{
-		Host:     jiraHost,
-		UserName: jiraUser,
-		Password: jiraPass,
+		Host:     viper.GetString("jira_host"),
+		UserName: viper.GetString("jira_user"),
+		Password: viper.GetString("jira_pass"),
 	}
-	gitClient := github.NewClient(gitHubToken)
+	gitClient := github.NewClient(viper.GetString("github_token"))
 	issueClient := jira.NewClient(target)
-	_, err = issueClient.Login()
+	//may want to refactor this
+	_, err := issueClient.Login()
 	if err != nil {
 		logger.Fatalf("failed login to Jira %s ", err)
 	}
+	// db
+	db, err := bolt.Open("./")
+	if err != nil {
+		logger.Fatalf("failed to open bolt db %s", err)
+	}
+	issueRepo := bolt.NewIssueRepo(db, logger)
+	// sprintService
+	sp := &sprintbot.Sprint{Name: viper.GetString("jira_sprint"), Board: viper.GetString("jira_board")}
+	sprintService := sprint.NewService(issueClient, gitClient, issueRepo, sp, logger)
+	sprintService.IgnoredRepos = []string{"RHMAPDocsNG", "fhcap", "fh-openshift-templates", "fh-core-openshift-templates"}
 	//chat route
 	{
 		fmt.Println("sprint set to ", viper.GetString("jira_sprint"), os.Getenv("SB_JIRA_SPRINT"))
-		sp := &sprintbot.Sprint{Name: viper.GetString("jira_sprint"), Board: viper.GetString("jira_board")}
-		sprintService := sprint.NewService(issueClient, gitClient, sp)
-		sprintService.IgnoredRepos = []string{"RHMAPDocsNG", "fhcap", "fh-openshift-templates", "fh-core-openshift-templates"}
 		chatUseCase := usecase.NewChat(sprintService)
 		web.ChatRoute(router, chatUseCase, logger, viper.GetString("rocket_token"))
+	}
+	var shutDownChan = make(chan struct{})
+	//start sync
+	{
+
+		go sprintService.Sync(20*time.Second, shutDownChan)
 	}
 
 	//http handler

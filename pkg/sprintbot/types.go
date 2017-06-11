@@ -278,6 +278,16 @@ func (ji *JiraIssue) PRS() []string {
 	return ji.Fields.Customfield12310220
 }
 
+func (ji *JiraIssue) RemovePR(pr string) {
+	na := []string{}
+	for _, p := range ji.PRS() {
+		if p != pr {
+			na = append(na, p)
+		}
+	}
+	ji.Fields.Customfield12310220 = na
+}
+
 func (ji *JiraIssue) Link(host string) string {
 	return host + "/browse/" + ji.Key
 }
