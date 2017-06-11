@@ -1,11 +1,15 @@
 ## Sprint Bot
 
-A service that watches your sprint gives useful information and integrates with rocket chat
+A service that watches your sprint gives useful information and integrates with rocket chat.
 
-
-- It will watch for open pull requests and notify the room
+Right now it will :
 
 - It will answer when asked ```sprintbot next```
+
+
+In the future it will:
+
+- It will watch for open pull requests and notify the room
 
 -It will allow you to create a distinct log entry that can be seen via the team at ```sprintbot log <today>```
 Creating an entry would be ```sprintbot log start mylog``` 
@@ -14,7 +18,7 @@ Creating an entry would be ```sprintbot log start mylog```
 
 - It will prompt if all PRs haven't been closed
 
-## Running Locally
+## Running Locally (not complete yet)
 
 clone the repo
 
