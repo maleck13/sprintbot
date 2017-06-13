@@ -39,8 +39,9 @@ Take the following steps to set-up the rocket web hook:
 - Set the following
   - Enabled to True
   - Select the channel where the sprintbot will be used
-  - Paste to URLs: http://sprintbot:3001/chat/message?source=rocket
-  
+  - Paste to URLs: http://sprintbots:3001/chat/message?source=rocket
+  - Make note of the rocket token for use below
+  - Copy `integrations/rocket/script.js` to Script
 
 ### Run sprintbot
 
