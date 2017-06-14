@@ -105,7 +105,7 @@ func main() {
 	//http handler
 	{
 		port := ":3000"
-		logrus.Info("starting sprintbot on  port " + port)
+		logrus.Info("starting sprintbot 0.0.1 on  port " + port)
 		httpHandler := web.BuildHTTPHandler(router)
 		if err := http.ListenAndServe(port, httpHandler); err != nil {
 			logger.Fatal(err)
