@@ -99,13 +99,13 @@ func main() {
 	//start sync
 	{
 
-		go sprintService.ScheduleSync(20*time.Second, shutDownChan)
+		go sprintService.ScheduleSync(30*time.Second, shutDownChan)
 	}
 
 	//http handler
 	{
 		port := ":3000"
-		logrus.Info("starting sprintbot 0.0.1 on  port " + port)
+		logrus.Info("starting sprintbot 0.0.1 	on  port " + port)
 		httpHandler := web.BuildHTTPHandler(router)
 		if err := http.ListenAndServe(port, httpHandler); err != nil {
 			logger.Fatal(err)
