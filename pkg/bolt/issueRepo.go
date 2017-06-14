@@ -22,7 +22,8 @@ func NewIssueRepo(db *bolt.DB, logger *logrus.Logger) *IssueRepo {
 }
 
 const (
-	issueBucket = "issues"
+	issueBucket   = "issues"
+	commentBucket = "issueComments"
 )
 
 // SaveNext will save the issues that should be done next
@@ -45,9 +46,37 @@ func (is *IssueRepo) SaveNext(next *sprintbot.NextIssues) error {
 
 }
 
+func (is *IssueRepo) SaveCommentted(id string, commentID string) error {
+	return is.DB.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte(commentBucket))
+		if err != nil {
+			return errors.Wrap(err, "when saving commentted issue failed to create a bucket ")
+		}
+		if err := b.Put([]byte(id), []byte(commentID)); err != nil {
+			return errors.Wrap(err, " failed to save commented issue ")
+		}
+		return nil
+	})
+}
+
+func (is *IssueRepo) FindCommentOnIssue(id string, commentID string) (string, error) {
+	var ret []byte
+	err := is.DB.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(commentBucket))
+		if nil == b {
+			return nil
+		}
+		ret = b.Get([]byte(id))
+		return nil
+	})
+	if err != nil {
+		return "", errors.Wrap(err, "bolt issue repo failed to find comment on issue ")
+	}
+	return string(ret), err
+}
+
 // FindNext will return the issues that need looking at next
 func (is *IssueRepo) FindNext() (*sprintbot.NextIssues, error) {
-	is.logger.Debug("finding next issues")
 	var data []byte
 	var ret = &sprintbot.NextIssues{}
 	err := is.DB.View(func(tx *bolt.Tx) error {

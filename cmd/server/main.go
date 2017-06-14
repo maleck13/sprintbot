@@ -99,7 +99,7 @@ func main() {
 	//start sync
 	{
 
-		go sprintService.Sync(20*time.Second, shutDownChan)
+		go sprintService.ScheduleSync(20*time.Second, shutDownChan)
 	}
 
 	//http handler

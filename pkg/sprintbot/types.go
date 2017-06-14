@@ -269,9 +269,13 @@ type JiraIssue struct {
 	Meta struct {
 		PrOpen bool
 	} `json:"-"`
-	ID   string `json:"id"`
+	Id   string `json:"id"`
 	Key  string `json:"key"`
 	Self string `json:"self"`
+}
+
+func (ji *JiraIssue) ID() string {
+	return ji.Id
 }
 
 func (ji *JiraIssue) PRS() []string {
@@ -375,6 +379,9 @@ const (
 	IssueStateReadyForQA = "Ready for QA"
 	IssueStateOpen       = "Open"
 	IssueStateClosed     = "Closed"
+	IssueStatePRSent     = "Pull Request Sent"
+
+	CommentTypeMoveToReadyForQE = "moveToQE"
 )
 
 type ErrUnkownCMD struct {

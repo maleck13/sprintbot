@@ -15,25 +15,25 @@ const (
 
 // Service handles the buisness logic around sprint actions
 type Service struct {
-	logger       *logrus.Logger
-	issueFinder  sprintbot.IssueFinder
-	repoChecker  sprintbot.RepoChecker
-	boardName    string
-	sprintName   string
-	IgnoredRepos []string
-	issueRepo    sprintbot.IssueRepo
+	logger            *logrus.Logger
+	issueEditorFinder sprintbot.IssueEditorFinder
+	repoChecker       sprintbot.RepoChecker
+	boardName         string
+	sprintName        string
+	IgnoredRepos      []string
+	issueRepo         sprintbot.IssueRepo
 }
 
 // NewService returns a new  instance of the sprint service
-func NewService(issueFinder sprintbot.IssueFinder, repoChecker sprintbot.RepoChecker, issueRepo sprintbot.IssueRepo, sp *sprintbot.Sprint, logger *logrus.Logger) *Service {
+func NewService(issueEditorFinder sprintbot.IssueEditorFinder, repoChecker sprintbot.RepoChecker, issueRepo sprintbot.IssueRepo, sp *sprintbot.Sprint, logger *logrus.Logger) *Service {
 	return &Service{
-		logger:       logger,
-		issueFinder:  issueFinder,
-		issueRepo:    issueRepo,
-		repoChecker:  repoChecker,
-		sprintName:   sp.Name,
-		boardName:    sp.Board,
-		IgnoredRepos: []string{}, // this doesn't feel quite right
+		logger:            logger,
+		issueEditorFinder: issueEditorFinder,
+		issueRepo:         issueRepo,
+		repoChecker:       repoChecker,
+		sprintName:        sp.Name,
+		boardName:         sp.Board,
+		IgnoredRepos:      []string{}, // this doesn't feel quite right
 	}
 }
 
@@ -72,7 +72,7 @@ func (s *Service) buildIssues(is []sprintbot.IssueState) []*sprintbot.Issue {
 	next := make([]*sprintbot.Issue, len(is))
 	for i, ni := range is {
 		next[i] = &sprintbot.Issue{
-			Link:        ni.Link(s.issueFinder.IssueHost()),
+			Link:        ni.Link(s.issueEditorFinder.IssueHost()),
 			PRs:         ni.PRS(),
 			Description: ni.Description(),
 		}
@@ -80,21 +80,21 @@ func (s *Service) buildIssues(is []sprintbot.IssueState) []*sprintbot.Issue {
 	return next
 }
 
-// Sync runs a sync of what to do next based on a timer
-func (s *Service) Sync(syncEvery time.Duration, stop chan struct{}) {
+// ScheduleSync runs a sync of what to do next based on a timer
+func (s *Service) ScheduleSync(syncEvery time.Duration, stop chan struct{}) {
 	t := time.NewTicker(syncEvery)
 	i := time.After(1 * time.Second)
 	for {
 		select {
 		case <-i:
 			s.logger.Info("starting first issue sync")
-			if err := s.sync(); err != nil {
+			if err := s.Sync(); err != nil {
 				s.logger.Errorf("syncing issues from sprint failed %s", err)
 			}
 			s.logger.Info("finished first issue sync")
 		case <-t.C:
 			s.logger.Info("starting issue sync")
-			if err := s.sync(); err != nil {
+			if err := s.Sync(); err != nil {
 				s.logger.Errorf("syncing issues from sprint failed %s", err)
 			}
 			s.logger.Info("finished issue sync")
@@ -105,13 +105,31 @@ func (s *Service) Sync(syncEvery time.Duration, stop chan struct{}) {
 	}
 }
 
-func (s *Service) sync() error {
+func (s *Service) addCommentToIssue(is sprintbot.IssueState, commentID string, commentText string) error {
+	cid, err := s.issueRepo.FindCommentOnIssue(is.ID(), commentID)
+	if err != nil {
+		return err
+	}
+	if commentID != cid {
+		s.logger.Debugf("adding comment to issue ")
+		if err := s.issueEditorFinder.AddComment(is.ID(), commentText); err != nil {
+			return errors.Wrap(err, "Sprint Service failed to add comment to issue ")
+		}
+		if err := s.issueRepo.SaveCommentted(is.ID(), commentID); err != nil {
+			return errors.Wrap(err, "Sprint Service Failed to save to issue Repo")
+		}
+	}
+	return nil
+}
+
+// Sync will run through each of the issues on the board and sync the state to the data store
+func (s *Service) Sync() error {
 	if s.boardName == "" || s.sprintName == "" {
 		return errors.New("expected a board name and sprint name but did not get them boardName: " + s.boardName + " sprintName: " + s.boardName)
 	}
 	var next = []*sprintbot.Issue{}
 	// retreive  all non closed issues
-	issueList, err := s.issueFinder.FindUnresolvedOnBoard(s.boardName, s.sprintName)
+	issueList, err := s.issueEditorFinder.FindUnresolvedOnBoard(s.boardName, s.sprintName)
 	if err != nil {
 		return errors.Wrap(err, "sprint service finding next failed to find unresolved issues ")
 	}
@@ -125,9 +143,21 @@ func (s *Service) sync() error {
 	if err != nil {
 		return err
 	}
+	//check for issues that have all PRs reviewed add comment to Jira from sprint bot asking if it should move to ready for QE
 	if len(awaitingPR) > 0 {
 		next := &sprintbot.NextIssues{Issues: s.buildIssues(awaitingPR), Message: "There are some outstanding PRs on these issues."}
 		return s.issueRepo.SaveNext(next)
+	}
+	//check for PR SENT as we know all PRS are reviewed
+	for _, is := range issues {
+		if is.State() == sprintbot.IssueStatePRSent {
+			s.logger.Debugf("found issue in state PR Sent where all PRS are reviewed adding comment")
+			err := s.addCommentToIssue(is, sprintbot.CommentTypeMoveToReadyForQE, "Sprintbot: Friendly reminder. All prs look to be reviewed, does this issue need to move on to Ready for QE? ")
+			if err != nil {
+				//TODO may want to group a set of errors rather than finish early
+				return errors.Wrap(err, "during sync failed to add comment to issue ")
+			}
+		}
 	}
 	// if none check for ready for qe but not qe in progress or PR sent where the pr has been reviewed
 	rqaissueList := issueList.FindInState(sprintbot.IssueStateReadyForQA)
