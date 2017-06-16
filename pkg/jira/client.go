@@ -40,8 +40,32 @@ func (c *Client) IssueHost() string {
 	return c.target.Host
 }
 
+func (c *Client) AddComment(id, comment string) error {
+	url := fmt.Sprintf("%s/rest/api/2/issue/%s/comment", c.target.Host, id)
+	body := `{"body": "` + comment + `"}`
+	reader := strings.NewReader(body)
+	req, err := http.NewRequest("POST", url, reader)
+	if err != nil {
+		return errors.Wrap(err, "failed to create comment request at AddComment")
+	}
+	c.headers(req)
+	client := c.configure()
+	resp, err := client.Do(req)
+	if err != nil {
+		return errors.Wrap(err, "making post request to add comment to Jira failed")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		data, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return errors.Wrap(err, fmt.Sprintf("unexpected response from Jira %s but failed to read response body", resp.Status))
+		}
+		return errors.New(fmt.Sprintf("unexpected response from Jira %s %v", resp.Status, string(data)))
+	}
+	return nil
+}
+
 func (c *Client) FindUnresolvedOnBoard(boardName, sprint string) (*sprintbot.IssueList, error) {
-	fmt.Println(c.target)
 	bl, err := c.Boards(boardName)
 	if err != nil {
 		return nil, err

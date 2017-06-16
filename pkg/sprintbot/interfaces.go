@@ -9,12 +9,20 @@ type IssueFinder interface {
 	IssueHost() string
 }
 
+type IssueEditorFinder interface {
+	IssueFinder
+	AddComment(id, c string) error
+}
+
 type IssueRepo interface {
 	SaveNext(next *NextIssues) error
 	FindNext() (*NextIssues, error)
+	SaveCommented(id string, commentID string) error
+	FindCommentOnIssue(id string, commentID string) (string, error)
 }
 
 type IssueState interface {
+	ID() string
 	PRS() []string
 	RemovePR(pr string)
 	Link(host string) string
