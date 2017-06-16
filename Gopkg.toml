@@ -82,4 +82,6 @@
 [[constraint]]
   name = "github.com/gorilla/mux"
   version = "v1.4.0"        
-
+[[constraint]]
+  name = "github.com/boltdb/bolt"
+  version = "v1.3.0"
