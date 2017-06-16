@@ -124,8 +124,8 @@ func (mr *mockIssueRepo) FindNext() (*sprintbot.NextIssues, error) {
 	mr.called["FindNext"]++
 	return mr.next, mr.err
 }
-func (mr *mockIssueRepo) SaveCommentted(id string, commentID string) error {
-	mr.called["SaveCommentted"]++
+func (mr *mockIssueRepo) SaveCommented(id string, commentID string) error {
+	mr.called["SaveCommented"]++
 	return mr.err
 }
 func (mr *mockIssueRepo) FindCommentOnIssue(id string, commentID string) (string, error) {
@@ -254,7 +254,7 @@ func TestSprintSync(t *testing.T) {
 				mockIssue{pr: "github.com/some/pr/20", link: "http://jira.com", prReviewed: true, state: sprintbot.IssueStatePRSent},
 			},
 			Err:                    nil,
-			IssueRepoCalls:         map[string]int{"SaveNext": 1, "FindCommentOnIssue": 1, "SaveCommentted": 1},
+			IssueRepoCalls:         map[string]int{"SaveNext": 1, "FindCommentOnIssue": 1, "SaveCommented": 1},
 			IssueEditorFinderCalls: map[string]int{"AddComment": 1},
 		},
 	}

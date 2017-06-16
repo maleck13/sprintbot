@@ -17,7 +17,7 @@ type IssueEditorFinder interface {
 type IssueRepo interface {
 	SaveNext(next *NextIssues) error
 	FindNext() (*NextIssues, error)
-	SaveCommentted(id string, commentID string) error
+	SaveCommented(id string, commentID string) error
 	FindCommentOnIssue(id string, commentID string) (string, error)
 }
 

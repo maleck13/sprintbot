@@ -115,7 +115,7 @@ func (s *Service) addCommentToIssue(is sprintbot.IssueState, commentID string, c
 		if err := s.issueEditorFinder.AddComment(is.ID(), commentText); err != nil {
 			return errors.Wrap(err, "Sprint Service failed to add comment to issue ")
 		}
-		if err := s.issueRepo.SaveCommentted(is.ID(), commentID); err != nil {
+		if err := s.issueRepo.SaveCommented(is.ID(), commentID); err != nil {
 			return errors.Wrap(err, "Sprint Service Failed to save to issue Repo")
 		}
 	}

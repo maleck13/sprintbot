@@ -46,7 +46,7 @@ func (is *IssueRepo) SaveNext(next *sprintbot.NextIssues) error {
 
 }
 
-func (is *IssueRepo) SaveCommentted(id string, commentID string) error {
+func (is *IssueRepo) SaveCommented(id string, commentID string) error {
 	return is.DB.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte(commentBucket))
 		if err != nil {
