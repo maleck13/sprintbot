@@ -30,8 +30,8 @@ func (mf *mockIssueEditorFinder) IssueHost() string {
 	return ""
 }
 
-func (mf *mockIssueEditorFinder) FindUnresolvedOnBoard(boardName, sprint string) (*sprintbot.IssueList, error) {
-	mf.called["FindUnresolvedOnBoard"]++
+func (mf *mockIssueEditorFinder) IssuesForBoard(boardName, sprint string) (*sprintbot.IssueList, error) {
+	mf.called["IssuesForBoard"]++
 	var ret = make([]sprintbot.IssueState, len(mf.issues))
 	for i, d := range mf.issues {
 		ret[i] = d
@@ -46,6 +46,25 @@ func (mf *mockIssueEditorFinder) AddComment(id, c string) error {
 
 func (mf *mockIssueEditorFinder) Called(method string) int {
 	return mf.called[method]
+}
+
+type mockSprintFinder struct {
+	s      *sprintbot.JiraSprint
+	err    error
+	called map[string]int
+}
+
+func newMockSprintFinder(s *sprintbot.JiraSprint, err error) *mockSprintFinder {
+	return &mockSprintFinder{
+		s:      s,
+		err:    err,
+		called: make(map[string]int),
+	}
+}
+
+func (md *mockSprintFinder) SprintForBoard(sprintName, boardName string) (*sprintbot.JiraSprint, error) {
+	md.called["SprintForBoard"]++
+	return md.s, md.err
 }
 
 type mockRepoChecker struct {
@@ -72,10 +91,15 @@ func (mrc *mockRepoChecker) Repo(pURL string) string {
 }
 
 type mockIssue struct {
-	pr         string
-	link       string
-	prReviewed bool
-	state      string
+	pr          string
+	link        string
+	prReviewed  bool
+	state       string
+	storyPoints int
+}
+
+func (mi mockIssue) StoryPoints() int {
+	return mi.storyPoints
 }
 
 func (mi mockIssue) RemovePR(pr string) {
@@ -102,18 +126,42 @@ func (mi mockIssue) ID() string {
 
 type mockIssueRepo struct {
 	next    *sprintbot.NextIssues
+	issues  map[string][]sprintbot.IssueState
 	err     error
 	comment string
 	called  map[string]int
 }
 
-func newMockIssueRepo(next *sprintbot.NextIssues, comment string, err error) *mockIssueRepo {
+func newMockIssueRepo(next *sprintbot.NextIssues, comment string, err error, issues map[string][]sprintbot.IssueState) *mockIssueRepo {
 	return &mockIssueRepo{
 		next:    next,
+		issues:  issues,
 		err:     err,
 		comment: comment,
 		called:  make(map[string]int),
 	}
+}
+
+func (mr *mockIssueRepo) FindIssuesInState(state string) ([]sprintbot.IssueState, error) {
+	mr.called["FindIssuesInState"]++
+	return mr.issues[state], mr.err
+}
+func (mr *mockIssueRepo) FindIssuesNotInState(state string) ([]sprintbot.IssueState, error) {
+	mr.called["FindIssuesNotInState"]++
+	ret := []sprintbot.IssueState{}
+	for k, v := range mr.issues {
+		if k != state {
+			for _, i := range v {
+				ret = append(ret, i)
+			}
+		}
+	}
+	return ret, mr.err
+}
+
+func (mr *mockIssueRepo) SaveIssuesInState(state string, issues []sprintbot.IssueState) error {
+	mr.called["SaveIssuesInState"]++
+	return mr.err
 }
 
 func (mr *mockIssueRepo) SaveNext(next *sprintbot.NextIssues) error {
@@ -161,12 +209,13 @@ func TestSprintNext(t *testing.T) {
 
 	for _, tc := range cases {
 		isf := &mockIssueEditorFinder{}
+		sprintFinder := newMockSprintFinder(nil, nil)
 		t.Run(tc.Name, func(t *testing.T) {
 			rc := &mockRepoChecker{}
 			s := sprintbot.Sprint{Name: "testSprint", Board: "testBoard"}
 			logger := logrus.StandardLogger()
-			issueRepo := newMockIssueRepo(tc.Next, "", tc.Err)
-			service := sprint.NewService(isf, rc, issueRepo, &s, logger)
+			issueRepo := newMockIssueRepo(tc.Next, "", tc.Err, nil)
+			service := sprint.NewService(isf, sprintFinder, rc, issueRepo, &s, logger)
 			ni, err := service.Next()
 			if tc.ExpectError && err == nil {
 				t.Fatalf("expected an error but got none")
@@ -261,11 +310,12 @@ func TestSprintSync(t *testing.T) {
 
 	for _, tc := range cases {
 		isf := newMockIssueEditorFinder(tc.Issues, tc.Err)
+		sprintFinder := newMockSprintFinder(nil, nil)
 		rc := &mockRepoChecker{issues: tc.Issues}
 		s := sprintbot.Sprint{Name: "testSprint", Board: "testBoard"}
 		logger := logrus.StandardLogger()
-		issueRepo := newMockIssueRepo(nil, "", nil)
-		service := sprint.NewService(isf, rc, issueRepo, &s, logger)
+		issueRepo := newMockIssueRepo(nil, "", nil, nil)
+		service := sprint.NewService(isf, sprintFinder, rc, issueRepo, &s, logger)
 		service.IgnoredRepos = []string{"RHMAPDocsNG", "fhcap", "fh-openshift-templates", "fh-core-openshift-templates"}
 		t.Run(tc.Name, func(t *testing.T) {
 			err := service.Sync()
@@ -291,5 +341,64 @@ func TestSprintSync(t *testing.T) {
 			}
 		})
 	}
+}
 
+func TestSprintStatus(t *testing.T) {
+	cases := []struct {
+		Name         string
+		Err          error
+		ExpectError  bool
+		OpenPoints   int
+		ClosedPoints int
+		Issues       map[string][]sprintbot.IssueState
+		Sprint       *sprintbot.JiraSprint
+	}{
+		{
+			Name:         "test status happy",
+			Err:          nil,
+			ExpectError:  false,
+			OpenPoints:   10,
+			ClosedPoints: 5,
+			Issues: map[string][]sprintbot.IssueState{
+				sprintbot.IssueStateOpen: []sprintbot.IssueState{
+					mockIssue{state: sprintbot.IssueStateOpen, storyPoints: 5},
+					mockIssue{state: sprintbot.IssueStateOpen, storyPoints: 5},
+				},
+				sprintbot.IssueStateClosed: []sprintbot.IssueState{
+					mockIssue{state: sprintbot.IssueStateClosed, storyPoints: 5},
+				},
+			},
+			Sprint: &sprintbot.JiraSprint{},
+		},
+	}
+
+	for _, tc := range cases {
+		isf := newMockIssueEditorFinder(nil, tc.Err)
+		sprintFinder := newMockSprintFinder(tc.Sprint, tc.Err)
+		rc := &mockRepoChecker{issues: nil}
+		s := sprintbot.Sprint{Name: "testSprint", Board: "testBoard"}
+		logger := logrus.StandardLogger()
+		issueRepo := newMockIssueRepo(nil, "", nil, tc.Issues)
+		service := sprint.NewService(isf, sprintFinder, rc, issueRepo, &s, logger)
+		service.IgnoredRepos = []string{"RHMAPDocsNG", "fhcap", "fh-openshift-templates", "fh-core-openshift-templates"}
+		t.Run(tc.Name, func(t *testing.T) {
+			status, err := service.Status()
+			if tc.ExpectError && err == nil {
+				t.Fatalf("expected an error but got none")
+			}
+			if !tc.ExpectError && err != nil {
+				t.Fatalf("did not expect error but got one %s ", err)
+			}
+			if !tc.ExpectError && status == nil {
+				t.Fatalf("status should not have been nil")
+			}
+			if tc.ClosedPoints != status.PointsCompleted {
+				t.Fatalf("expected the points closed to match got %v and %v ", tc.ClosedPoints, status.PointsCompleted)
+			}
+			if tc.OpenPoints != status.PointsRemaining {
+				t.Fatalf("expected the points open to match got %v and %v ", tc.OpenPoints, status.PointsRemaining)
+			}
+
+		})
+	}
 }

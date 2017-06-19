@@ -274,6 +274,12 @@ type JiraIssue struct {
 	Self string `json:"self"`
 }
 
+func (ji *JiraIssue) StoryPoints() int {
+	//NOTE this is probably fragile as it may be a different field on different jira
+	fmt.Println("this is the sp value ", ji.Fields.Customfield12310243)
+	return int(ji.Fields.Customfield12310243)
+}
+
 func (ji *JiraIssue) ID() string {
 	return ji.Id
 }
@@ -338,7 +344,11 @@ type Sprint struct {
 	Board string
 }
 
-type ChatResponse struct{}
+type ChatResponse struct {
+	CMD     string
+	Message string
+	Data    interface{}
+}
 
 type NextIssues struct {
 	Message string
@@ -379,6 +389,7 @@ const (
 	IssueStateReadyForQA = "Ready for QA"
 	IssueStateOpen       = "Open"
 	IssueStateClosed     = "Closed"
+	IssueStateVerified   = "Verified"
 	IssueStatePRSent     = "Pull Request Sent"
 
 	CommentTypeMoveToReadyForQE = "moveToQE"
@@ -390,6 +401,14 @@ type ErrUnkownCMD struct {
 
 func (e *ErrUnkownCMD) Error() string {
 	return fmt.Sprintf("Error unknown cmd: %s", e.Message)
+}
+
+type ErrNotFound struct {
+	Message string
+}
+
+func (e *ErrNotFound) Error() string {
+	return fmt.Sprintf("Error failed to find resource : %s", e.Message)
 }
 
 type ErrInvalid struct {
@@ -431,4 +450,35 @@ type Board struct {
 	Name string `json:"name"`
 	Self string `json:"self"`
 	Type string `json:"type"`
+}
+
+type SprintStatus struct {
+	PointsCompleted            int `json:"pointsCompleted"`
+	PointsRemaining            int `json:"pointsRemaining"`
+	Velocity                   int `json:"velocity"`
+	IssuesRemaining            int `json:"issuesRemaining"`
+	DaysRemaining              int `json:"daysRemaining"`
+	EstimatedDaysWorkRemaining int `json:"estimatedDaysWorkRemaining"`
+	//Issues that may need attention as they have been in one state for a long time
+	IssuesOfInterest []IssueState `json:"issuesOfInterest"`
+}
+
+type JiraSprintList struct {
+	IsLast     bool          `json:"isLast"`
+	MaxResults int           `json:"maxResults"`
+	StartAt    int           `json:"startAt"`
+	Total      int           `json:"total"`
+	Values     []*JiraSprint `json:"values"`
+}
+
+type JiraSprint struct {
+	CompleteDate  string `json:"completeDate"`
+	EndDate       string `json:"endDate"`
+	Goal          string `json:"goal"`
+	ID            int    `json:"id"`
+	Name          string `json:"name"`
+	OriginBoardID int    `json:"originBoardId"`
+	Self          string `json:"self"`
+	StartDate     string `json:"startDate"`
+	State         string `json:"state"`
 }

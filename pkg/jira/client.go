@@ -65,7 +65,7 @@ func (c *Client) AddComment(id, comment string) error {
 	return nil
 }
 
-func (c *Client) FindUnresolvedOnBoard(boardName, sprint string) (*sprintbot.IssueList, error) {
+func (c *Client) IssuesForBoard(boardName, sprint string) (*sprintbot.IssueList, error) {
 	bl, err := c.Boards(boardName)
 	if err != nil {
 		return nil, err
@@ -99,7 +99,7 @@ func (c *Client) FindUnresolvedOnBoard(boardName, sprint string) (*sprintbot.Iss
 		if err != nil {
 			return nil, err
 		}
-		return c.FindUnresolvedOnBoard(boardName, sprint)
+		return c.IssuesForBoard(boardName, sprint)
 	}
 	if resp.StatusCode > 300 {
 		return nil, errors.New("Unexpected Jira statusCode: " + resp.Status)
@@ -112,10 +112,12 @@ func (c *Client) FindUnresolvedOnBoard(boardName, sprint string) (*sprintbot.Iss
 	if err := json.Unmarshal(data, jIssues); err != nil {
 		return nil, errors.Wrap(err, "failed to decode the board issue list ")
 	}
+	fmt.Printf("found issues %v \n", len(jIssues.Issues))
 	var issues = make([]sprintbot.IssueState, len(jIssues.Issues))
 	for i, j := range jIssues.Issues {
 		issues[i] = j
 	}
+	fmt.Printf("issues list %v ", len(issues))
 	issueList := sprintbot.NewIssueList(issues)
 	return issueList, nil
 }
@@ -181,4 +183,49 @@ func (c *Client) Login() (*sprintbot.Auth, error) {
 	}
 	c.target.Session = authRes.Session.Value
 	return authRes, nil
+}
+
+func (c *Client) SprintForBoard(sprintName, boardName string) (*sprintbot.JiraSprint, error) {
+	bl, err := c.Boards(boardName)
+	if err != nil {
+		return nil, err
+	}
+	var boardID int
+	for _, b := range bl.Values {
+		if b.Name == boardName {
+			boardID = b.ID
+			break
+		}
+	}
+	if boardID == 0 {
+		return nil, errors.New("no board found for boardName " + boardName)
+	}
+	URL := fmt.Sprintf("%s/rest/agile/1.0/board/%v/sprint?state=active", c.target.Host, boardID)
+	req, err := http.NewRequest("GET", URL, nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create board sprint  request")
+	}
+	c.headers(req)
+	client := c.configure()
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to do board sprint list request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.New("Unexpected  Jira statusCode: " + resp.Status)
+	}
+	decoder := json.NewDecoder(resp.Body)
+	sl := &sprintbot.JiraSprintList{}
+	if err := decoder.Decode(sl); err != nil {
+		return nil, errors.Wrap(err, "failed to decode jira sprint list ")
+	}
+
+	for _, s := range sl.Values {
+		fmt.Println(s.Name)
+		if s.Name == sprintName {
+			return s, nil
+		}
+	}
+	return nil, &sprintbot.ErrNotFound{Message: "failed to find sprint " + sprintName + " on board " + boardName}
 }

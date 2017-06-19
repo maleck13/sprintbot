@@ -33,7 +33,7 @@ class Script {
     let match;
 
     // Change the URL and method of the request
-    console.log(request)
+    
     request.headers["Content-type"] = "application/json";
     // Prevent the request and return a new message
     match = request.data.text.match(/^sprintbot help$/);
@@ -44,6 +44,7 @@ class Script {
             '**commands**',
             '```',
             '  next : will search the available issues and let you know what is best to take next',
+            '  status : will return a sprint status report',
             '```'
           ].join('\n')
         }
@@ -56,6 +57,55 @@ class Script {
       return request;
     }
   }
+
+
+handleIssues(issues){
+var issueList = []
+for (var i = 0; i < issues.length; i++) {
+      var issue = issues[i];
+      if (issue.PRs && issue.PRs.length > 0) {
+        for (var k = 0; k < issue.PRs.length; k++) {
+          issueList.push({
+            "title": "PR needs review",
+            "title_link": issue.PRs[k],
+            "text": "The Jira " + issue.Link + " has open PR(s) that haven't been reviewed yet:\n " + issue.PRs[k] + "",
+            "color": "#764FA5"
+          })
+        }
+      }
+    }
+    if (issueList.length == 0) {
+      for (var i = 0; i < issues.length; i++) {
+        var issue = issues[i];
+        issueList.push({
+          "title": "Jira " + issue.Description,
+          "title_link": issue.Link,
+          "text": "The Jira " + issue.Link + " needs  looking at ",
+          "color": "#764FA5"
+        })
+      }
+    }
+    return issueList
+}
+
+handleStatus(status){
+  /*
+  { pointsCompleted: 0,
+     pointsRemaining: 0,
+     velocity: 0,
+     issuesRemaining: 0,
+     daysRemaining: 0,
+     estimatedDaysWorkRemaining: 0,
+     issuesOfInterest: null }
+  */
+  console.log(status)
+  return [{
+    "title":"points completed: " + status.pointsCompleted
+  },{
+    "title":"points remaining: " + status.pointsRemaining
+  }]
+
+}
 
   /**
    * @params {object} request, response
@@ -77,37 +127,19 @@ class Script {
     // return false;
     var resBody = JSON.parse(response.content_raw);
     console.log("resBody", resBody)
-    var issues = []
-    for (var i = 0; i < resBody.Issues.length; i++) {
-      var issue = resBody.Issues[i];
-      if (issue.PRs && issue.PRs.length > 0) {
-        for (var k = 0; k < issue.PRs.length; k++) {
-          issues.push({
-            "title": "PR needs review",
-            "title_link": issue.PRs[k],
-            "text": "The Jira " + issue.Link + " has open PR(s) that haven't been reviewed yet:\n " + issue.PRs[k] + "",
-            "color": "#764FA5"
-          })
-        }
-      }
+    var content = []
+    if(resBody.CMD && resBody.CMD === "next"){
+      content = this.handleIssues(resBody.Data);
+    }else if (resBody.CMD && resBody.CMD === "status"){
+       content = this.handleStatus(resBody.Data);
     }
-    if (issues.length == 0) {
-      for (var i = 0; i < resBody.Issues.length; i++) {
-        var issue = resBody.Issues[i];
-        issues.push({
-          "title": "Jira " + issue.Description,
-          "title_link": issue.Link,
-          "text": "The Jira " + issue.Link + " needs  looking at ",
-          "color": "#764FA5"
-        })
-      }
-    }
+    
     // Return empty will proceed with the default response process
     return {
       content: {
         "username": "sprintbot",
         "text": resBody.Message,
-        "attachments": issues
+        "attachments": content
       }
     }
 

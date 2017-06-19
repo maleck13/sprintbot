@@ -3,6 +3,8 @@ package sprint
 import (
 	"time"
 
+	"fmt"
+
 	"github.com/Sirupsen/logrus"
 	"github.com/maleck13/sprintbot/pkg/sprintbot"
 	"github.com/pkg/errors"
@@ -11,12 +13,15 @@ import (
 const (
 	// CommandNext is the command sent from the chat server to find out whats next in the sprint
 	CommandNext = "next"
+	//CommandStatus is a command sent to get the status of the current sprint
+	CommandStatus = "status"
 )
 
 // Service handles the buisness logic around sprint actions
 type Service struct {
 	logger            *logrus.Logger
 	issueEditorFinder sprintbot.IssueEditorFinder
+	sprintFinder      sprintbot.SprintFinder
 	repoChecker       sprintbot.RepoChecker
 	boardName         string
 	sprintName        string
@@ -25,10 +30,11 @@ type Service struct {
 }
 
 // NewService returns a new  instance of the sprint service
-func NewService(issueEditorFinder sprintbot.IssueEditorFinder, repoChecker sprintbot.RepoChecker, issueRepo sprintbot.IssueRepo, sp *sprintbot.Sprint, logger *logrus.Logger) *Service {
+func NewService(issueEditorFinder sprintbot.IssueEditorFinder, sprintFinder sprintbot.SprintFinder, repoChecker sprintbot.RepoChecker, issueRepo sprintbot.IssueRepo, sp *sprintbot.Sprint, logger *logrus.Logger) *Service {
 	return &Service{
 		logger:            logger,
 		issueEditorFinder: issueEditorFinder,
+		sprintFinder:      sprintFinder,
 		issueRepo:         issueRepo,
 		repoChecker:       repoChecker,
 		sprintName:        sp.Name,
@@ -122,6 +128,20 @@ func (s *Service) addCommentToIssue(is sprintbot.IssueState, commentID string, c
 	return nil
 }
 
+func (s *Service) groupAndStoreIssues(issues []sprintbot.IssueState) error {
+	state := map[string][]sprintbot.IssueState{}
+	for _, i := range issues {
+		state[i.State()] = append(state[i.State()], i)
+	}
+	for k, v := range state {
+		s.logger.Debugf("storing issues in state %s", k)
+		if err := s.issueRepo.SaveIssuesInState(k, v); err != nil {
+			return errors.Wrap(err, "failed to save issues while grouping and storing ")
+		}
+	}
+	return nil
+}
+
 // Sync will run through each of the issues on the board and sync the state to the data store
 func (s *Service) Sync() error {
 	if s.boardName == "" || s.sprintName == "" {
@@ -129,7 +149,7 @@ func (s *Service) Sync() error {
 	}
 	var next = []*sprintbot.Issue{}
 	// retreive  all non closed issues
-	issueList, err := s.issueEditorFinder.FindUnresolvedOnBoard(s.boardName, s.sprintName)
+	issueList, err := s.issueEditorFinder.IssuesForBoard(s.boardName, s.sprintName)
 	if err != nil {
 		return errors.Wrap(err, "sprint service finding next failed to find unresolved issues ")
 	}
@@ -138,6 +158,13 @@ func (s *Service) Sync() error {
 		next := &sprintbot.NextIssues{Issues: s.buildIssues(issues), Message: "nothing to do?"}
 		return s.issueRepo.SaveNext(next)
 	}
+
+	// we can do this in the background
+	go func() {
+		if err := s.groupAndStoreIssues(issues); err != nil {
+			s.logger.Error("sync failed to group and store issues ", err)
+		}
+	}()
 	// check for PR sent and not reviewed PRs
 	awaitingPR, err := s.awaitingPrReview(issues)
 	if err != nil {
@@ -189,4 +216,45 @@ func (s *Service) Next() (*sprintbot.NextIssues, error) {
 		return nil, errors.Wrap(err, "Sprint next failed to find next issues from issueRepo ")
 	}
 	return next, nil
+}
+
+// Status will give back a breif set of details about the sprint
+func (s *Service) Status() (*sprintbot.SprintStatus, error) {
+	status := &sprintbot.SprintStatus{}
+	closed, err := s.issueRepo.FindIssuesInState(sprintbot.IssueStateClosed)
+	if err != nil {
+		return nil, errors.Wrap(err, "Status failed could not get issues in state closed")
+	}
+	//add up their points
+	closedPoints := 0
+	for _, ci := range closed {
+		closedPoints += ci.StoryPoints()
+	}
+	verified, err := s.issueRepo.FindIssuesInState(sprintbot.IssueStateVerified)
+	if err != nil {
+		return nil, errors.Wrap(err, "Status failed could not get issues in state verfied")
+	}
+	for _, ci := range verified {
+		closedPoints += ci.StoryPoints()
+	}
+	status.PointsCompleted = closedPoints
+	stillInProgress, err := s.issueRepo.FindIssuesNotInState(sprintbot.IssueStateClosed)
+	if err != nil {
+		return nil, errors.Wrap(err, "Status failed could not find issues that are not in state closed ")
+	}
+	openPoints := 0
+	for _, oi := range stillInProgress {
+		openPoints += oi.StoryPoints()
+	}
+	status.PointsRemaining = openPoints
+
+	//maybe move to sync and store in bolt
+	js, err := s.sprintFinder.SprintForBoard(s.sprintName, s.boardName)
+	if err != nil {
+		return nil, errors.Wrap(err, "sprint status failed. Attempted to get sprint "+s.sprintName+" for board "+s.boardName)
+	}
+
+	fmt.Println(js)
+
+	return status, nil
 }

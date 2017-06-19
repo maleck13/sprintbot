@@ -10,14 +10,16 @@ import (
 )
 
 type IssueRepo struct {
-	logger *logrus.Logger
-	DB     *bolt.DB
+	logger  *logrus.Logger
+	DB      *bolt.DB
+	decoder sprintbot.IssueDecoder
 }
 
-func NewIssueRepo(db *bolt.DB, logger *logrus.Logger) *IssueRepo {
+func NewIssueRepo(db *bolt.DB, logger *logrus.Logger, decoder sprintbot.IssueDecoder) *IssueRepo {
 	return &IssueRepo{
-		logger: logger,
-		DB:     db,
+		logger:  logger,
+		DB:      db,
+		decoder: decoder,
 	}
 }
 
@@ -94,4 +96,71 @@ func (is *IssueRepo) FindNext() (*sprintbot.NextIssues, error) {
 		return nil, errors.Wrap(err, "failed to unmarshal the next issues ")
 	}
 	return ret, nil
+}
+
+func (is *IssueRepo) SaveIssuesInState(state string, issues []sprintbot.IssueState) error {
+	return is.DB.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte(issueBucket))
+		if err != nil {
+			return errors.Wrap(err, "when saving issues in state failed to create a bucket ")
+		}
+		data, err := json.Marshal(issues)
+		if err != nil {
+			return errors.Wrap(err, "when saving  issues in state, failed to marshal the target to json data ")
+		}
+		if err := b.Put([]byte(state), data); err != nil {
+			return errors.Wrap(err, "when saving issues in state, failed to put the target in the bolt db bucket")
+		}
+		return nil
+	})
+}
+
+func (is *IssueRepo) FindIssuesInState(state string) ([]sprintbot.IssueState, error) {
+	var data []byte
+	err := is.DB.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(issueBucket))
+		if nil == b {
+			return errors.New("no such bucket found " + issueBucket)
+		}
+		data = b.Get([]byte(state))
+		return nil
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "bolt issue repo failed to FindIssuesInState  ")
+	}
+	issues, err := is.decoder.Decode(data)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to unmarshal the issues in state ")
+	}
+
+	return issues, err
+}
+
+func (is *IssueRepo) FindIssuesNotInState(state string) ([]sprintbot.IssueState, error) {
+	var data []byte
+	var issuesNotInState []sprintbot.IssueState
+	err := is.DB.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(issueBucket))
+		if nil == b {
+			return errors.New("no such bucket found " + issueBucket)
+		}
+		b.ForEach(func(k, v []byte) error {
+			key := string(k)
+			if key != state {
+				data = b.Get([]byte(state))
+				issues, err := is.decoder.Decode(data)
+				if err != nil {
+					return errors.Wrap(err, "failed to unmarshal the issues in state ")
+				}
+				issuesNotInState = append(issuesNotInState, issues...)
+			}
+			return nil
+		})
+
+		return nil
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "bolt issue repo failed to FindIssuesInState  ")
+	}
+	return issuesNotInState, err
 }

@@ -5,8 +5,12 @@ type Chatter interface {
 }
 
 type IssueFinder interface {
-	FindUnresolvedOnBoard(boardName, sprint string) (*IssueList, error)
+	IssuesForBoard(boardName, sprint string) (*IssueList, error)
 	IssueHost() string
+}
+
+type SprintFinder interface {
+	SprintForBoard(sprintName, boardName string) (*JiraSprint, error)
 }
 
 type IssueEditorFinder interface {
@@ -14,11 +18,18 @@ type IssueEditorFinder interface {
 	AddComment(id, c string) error
 }
 
+type IssueDecoder interface {
+	Decode(data []byte) ([]IssueState, error)
+}
+
 type IssueRepo interface {
 	SaveNext(next *NextIssues) error
 	FindNext() (*NextIssues, error)
 	SaveCommented(id string, commentID string) error
 	FindCommentOnIssue(id string, commentID string) (string, error)
+	SaveIssuesInState(state string, issues []IssueState) error
+	FindIssuesInState(state string) ([]IssueState, error)
+	FindIssuesNotInState(state string) ([]IssueState, error)
 }
 
 type IssueState interface {
@@ -28,6 +39,7 @@ type IssueState interface {
 	Link(host string) string
 	State() string
 	Description() string
+	StoryPoints() int
 }
 
 type RepoChecker interface {
