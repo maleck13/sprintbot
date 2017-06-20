@@ -3,8 +3,6 @@ package sprint
 import (
 	"time"
 
-	"fmt"
-
 	"github.com/Sirupsen/logrus"
 	"github.com/maleck13/sprintbot/pkg/sprintbot"
 	"github.com/pkg/errors"
@@ -254,7 +252,36 @@ func (s *Service) Status() (*sprintbot.SprintStatus, error) {
 		return nil, errors.Wrap(err, "sprint status failed. Attempted to get sprint "+s.sprintName+" for board "+s.boardName)
 	}
 
-	fmt.Println(js)
-
+	//fmt.Println("jira status", js.EndDate, js.StartDate)
+	format := "2006-01-02T15:04:05.000-07:00"
+	end, err := time.Parse(format, js.EndDate)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to parse sprint end date ")
+	}
+	start, err := time.Parse(format, js.StartDate)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to parse sprint start date ")
+	}
+	totalTimeLeft := end.Sub(time.Now())
+	days := int(totalTimeLeft.Hours() / 24)
+	daysLeft := 0
+	for i := 0; i < days; i++ {
+		next := time.Now().Add(time.Duration(i) * (24 * time.Hour))
+		if next.Weekday() != time.Saturday && next.Weekday() != time.Sunday {
+			daysLeft++
+		}
+	}
+	status.DaysRemaining = daysLeft
+	totalTimeGone := time.Since(start)
+	days = int(totalTimeGone.Hours() / 24)
+	daysGone := 0
+	for i := 0; i < days; i++ {
+		remove := i * -1
+		prev := time.Now().AddDate(0, 0, remove)
+		if prev.Weekday() != time.Saturday && prev.Weekday() != time.Sunday {
+			daysGone++
+		}
+	}
+	status.Velocity = closedPoints / daysGone
 	return status, nil
 }

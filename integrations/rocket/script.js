@@ -100,9 +100,15 @@ handleStatus(status){
   */
   console.log(status)
   return [{
-    "title":"points completed: " + status.pointsCompleted
+    "title":"Points completed: " + status.pointsCompleted
   },{
-    "title":"points remaining: " + status.pointsRemaining
+    "title":"Points remaining: " + status.pointsRemaining
+  },
+  {
+    "title":"Work Days Remaining: " + status.daysRemaining
+  },
+  {
+    "title":"Sprint velocity: " + status.velocity
   }]
 
 }
