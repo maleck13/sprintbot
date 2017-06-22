@@ -29,7 +29,7 @@ type IssueRepo interface {
 	FindCommentOnIssue(id string, commentID string) (string, error)
 	SaveIssuesInState(state string, issues []IssueState) error
 	FindIssuesInState(state string) ([]IssueState, error)
-	FindIssuesNotInState(state string) ([]IssueState, error)
+	FindIssuesNotInStates(states []string) ([]IssueState, error)
 }
 
 type IssueState interface {

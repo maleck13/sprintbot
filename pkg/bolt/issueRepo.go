@@ -136,8 +136,16 @@ func (is *IssueRepo) FindIssuesInState(state string) ([]sprintbot.IssueState, er
 	return issues, err
 }
 
-func (is *IssueRepo) FindIssuesNotInState(state string) ([]sprintbot.IssueState, error) {
+func (is *IssueRepo) FindIssuesNotInStates(states []string) ([]sprintbot.IssueState, error) {
 	var data []byte
+	var contains = func(s string) bool {
+		for _, state := range states {
+			if s == state {
+				return true
+			}
+		}
+		return false
+	}
 	var issuesNotInState []sprintbot.IssueState
 	err := is.DB.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(issueBucket))
@@ -146,8 +154,8 @@ func (is *IssueRepo) FindIssuesNotInState(state string) ([]sprintbot.IssueState,
 		}
 		b.ForEach(func(k, v []byte) error {
 			key := string(k)
-			if key != state {
-				data = b.Get([]byte(state))
+			if !contains(key) {
+				data = b.Get([]byte(key))
 				issues, err := is.decoder.Decode(data)
 				if err != nil {
 					return errors.Wrap(err, "failed to unmarshal the issues in state ")

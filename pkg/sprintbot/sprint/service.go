@@ -236,7 +236,7 @@ func (s *Service) Status() (*sprintbot.SprintStatus, error) {
 		closedPoints += ci.StoryPoints()
 	}
 	status.PointsCompleted = closedPoints
-	stillInProgress, err := s.issueRepo.FindIssuesNotInState(sprintbot.IssueStateClosed)
+	stillInProgress, err := s.issueRepo.FindIssuesNotInStates([]string{sprintbot.IssueStateClosed, sprintbot.IssueStateVerified})
 	if err != nil {
 		return nil, errors.Wrap(err, "Status failed could not find issues that are not in state closed ")
 	}
