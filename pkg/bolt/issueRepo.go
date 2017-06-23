@@ -46,7 +46,7 @@ func (is *IssueRepo) SaveNext(next *sprintbot.NextIssues) error {
 
 }
 
-func (is *IssueRepo) SaveCommented(id string, commentID string) error {
+func (is *IssueRepo) SaveCommented(id, commentID string) error {
 	return is.DB.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte(commentBucket))
 		if err != nil {
@@ -59,18 +59,18 @@ func (is *IssueRepo) SaveCommented(id string, commentID string) error {
 	})
 }
 
-func (is *IssueRepo) FindCommentOnIssue(id string, commentID string) (string, error) {
+func (is *IssueRepo) FindCommentOnIssue(id, commentID string) (string, error) {
 	var ret []byte
 	err := is.DB.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(commentBucket))
 		if nil == b {
-			return nil
+			return errors.New("no such bucket found: " + commentBucket)
 		}
 		ret = b.Get([]byte(id))
 		return nil
 	})
 	if err != nil {
-		return "", errors.Wrap(err, "bolt issue repo failed to find comment on issue ")
+		return "", err
 	}
 	return string(ret), err
 }
