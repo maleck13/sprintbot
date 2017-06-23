@@ -64,7 +64,7 @@ func (is *IssueRepo) FindCommentOnIssue(id, commentID string) (string, error) {
 	err := is.DB.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(commentBucket))
 		if nil == b {
-			return errors.Wrap(err, "bolt issue repo failed to find comment on issue ")
+			return errors.New("no such bucket found: " + commentBucket)
 		}
 		ret = b.Get([]byte(id))
 		return nil
