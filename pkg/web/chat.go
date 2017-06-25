@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"fmt"
-
 	"github.com/Sirupsen/logrus"
 	"github.com/maleck13/sprintbot/pkg/sprintbot"
 	"github.com/maleck13/sprintbot/pkg/sprintbot/usecase"
@@ -45,14 +43,13 @@ func (ch *ChatHandler) IncomingMessage(rw http.ResponseWriter, req *http.Request
 		http.Error(rw, "failed decoding incoming message. "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	fmt.Println("auth set to " + ch.authToken)
 	if ch.authToken != chatCMD.AuthToken() {
 		http.Error(rw, "not authorised", http.StatusUnauthorized)
 		return
 	}
 	chatResp, err := ch.chat.Handle(chatCMD)
 	if err != nil {
-		handleChatError(err, rw)
+		ch.handleChatError(err, rw)
 		return
 	}
 	if err := encoder.Encode(chatResp); err != nil {
@@ -61,8 +58,8 @@ func (ch *ChatHandler) IncomingMessage(rw http.ResponseWriter, req *http.Request
 	}
 }
 
-func handleChatError(err error, rw http.ResponseWriter) {
-
+func (ch *ChatHandler) handleChatError(err error, rw http.ResponseWriter) {
+	ch.logger.Error(err)
 	switch err.(type) {
 	case *sprintbot.ErrUnkownCMD, *sprintbot.ErrInvalid:
 		http.Error(rw, err.Error(), http.StatusBadRequest)

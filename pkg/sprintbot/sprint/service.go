@@ -1,6 +1,7 @@
 package sprint
 
 import (
+	"math"
 	"time"
 
 	"github.com/Sirupsen/logrus"
@@ -11,30 +12,72 @@ import (
 const (
 	// CommandNext is the command sent from the chat server to find out whats next in the sprint
 	CommandNext = "next"
+	//CommandStatus is a command sent to get the status of the current sprint
+	CommandStatus = "status"
 )
 
 // Service handles the buisness logic around sprint actions
 type Service struct {
 	logger            *logrus.Logger
 	issueEditorFinder sprintbot.IssueEditorFinder
+	sprintFinder      sprintbot.SprintFinder
 	repoChecker       sprintbot.RepoChecker
 	boardName         string
 	sprintName        string
 	IgnoredRepos      []string
 	issueRepo         sprintbot.IssueRepo
+	//frustrating to have to expose this but helps with testing
+	TimeCalc func(startDate, endDate string) (*sprintbot.Time, error)
 }
 
 // NewService returns a new  instance of the sprint service
-func NewService(issueEditorFinder sprintbot.IssueEditorFinder, repoChecker sprintbot.RepoChecker, issueRepo sprintbot.IssueRepo, sp *sprintbot.Sprint, logger *logrus.Logger) *Service {
+func NewService(issueEditorFinder sprintbot.IssueEditorFinder, sprintFinder sprintbot.SprintFinder, repoChecker sprintbot.RepoChecker, issueRepo sprintbot.IssueRepo, sp *sprintbot.Sprint, logger *logrus.Logger) *Service {
 	return &Service{
 		logger:            logger,
 		issueEditorFinder: issueEditorFinder,
+		sprintFinder:      sprintFinder,
 		issueRepo:         issueRepo,
 		repoChecker:       repoChecker,
 		sprintName:        sp.Name,
 		boardName:         sp.Board,
 		IgnoredRepos:      []string{}, // this doesn't feel quite right
+		TimeCalc:          calcTime,
 	}
+}
+
+func calcTime(startTime, endTime string) (*sprintbot.Time, error) {
+	format := "2006-01-02T15:04:05.000-07:00"
+	end, err := time.Parse(format, endTime)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to parse sprint end date ")
+	}
+	start, err := time.Parse(format, startTime)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to parse sprint start date ")
+	}
+	totalTimeLeft := end.Sub(time.Now())
+	days := int(totalTimeLeft.Hours() / 24)
+	daysLeft := 0
+	for i := 0; i < days; i++ {
+		next := time.Now().Add(time.Duration(i) * (24 * time.Hour))
+		if next.Weekday() != time.Saturday && next.Weekday() != time.Sunday {
+			daysLeft++
+		}
+	}
+	t := &sprintbot.Time{}
+	t.DaysLeft = daysLeft
+	totalTimeGone := time.Since(start)
+	days = int(totalTimeGone.Hours() / 24)
+	daysGone := 0
+	for i := 0; i < days; i++ {
+		remove := i * -1
+		prev := time.Now().AddDate(0, 0, remove)
+		if prev.Weekday() != time.Saturday && prev.Weekday() != time.Sunday {
+			daysGone++
+		}
+	}
+	t.DaysGone = daysGone
+	return t, nil
 }
 
 func (s *Service) awaitingPrReview(issues []sprintbot.IssueState) ([]sprintbot.IssueState, error) {
@@ -122,6 +165,20 @@ func (s *Service) addCommentToIssue(is sprintbot.IssueState, commentID string, c
 	return nil
 }
 
+func (s *Service) groupAndStoreIssues(issues []sprintbot.IssueState) error {
+	state := map[string][]sprintbot.IssueState{}
+	for _, i := range issues {
+		state[i.State()] = append(state[i.State()], i)
+	}
+	for k, v := range state {
+		s.logger.Debugf("storing issues in state %s", k)
+		if err := s.issueRepo.SaveIssuesInState(k, v); err != nil {
+			return errors.Wrap(err, "failed to save issues while grouping and storing ")
+		}
+	}
+	return nil
+}
+
 // Sync will run through each of the issues on the board and sync the state to the data store
 func (s *Service) Sync() error {
 	if s.boardName == "" || s.sprintName == "" {
@@ -129,7 +186,7 @@ func (s *Service) Sync() error {
 	}
 	var next = []*sprintbot.Issue{}
 	// retreive  all non closed issues
-	issueList, err := s.issueEditorFinder.FindUnresolvedOnBoard(s.boardName, s.sprintName)
+	issueList, err := s.issueEditorFinder.IssuesForBoard(s.boardName, s.sprintName)
 	if err != nil {
 		return errors.Wrap(err, "sprint service finding next failed to find unresolved issues ")
 	}
@@ -138,6 +195,13 @@ func (s *Service) Sync() error {
 		next := &sprintbot.NextIssues{Issues: s.buildIssues(issues), Message: "nothing to do?"}
 		return s.issueRepo.SaveNext(next)
 	}
+
+	// we can do this in the background
+	go func() {
+		if err := s.groupAndStoreIssues(issues); err != nil {
+			s.logger.Error("sync failed to group and store issues ", err)
+		}
+	}()
 	// check for PR sent and not reviewed PRs
 	awaitingPR, err := s.awaitingPrReview(issues)
 	if err != nil {
@@ -189,4 +253,51 @@ func (s *Service) Next() (*sprintbot.NextIssues, error) {
 		return nil, errors.Wrap(err, "Sprint next failed to find next issues from issueRepo ")
 	}
 	return next, nil
+}
+
+// Status will give back a breif set of details about the sprint
+func (s *Service) Status() (*sprintbot.SprintStatus, error) {
+	status := &sprintbot.SprintStatus{}
+	closed, err := s.issueRepo.FindIssuesInState(sprintbot.IssueStateClosed)
+	if err != nil {
+		return nil, errors.Wrap(err, "Status failed could not get issues in state closed")
+	}
+	//add up their points
+	closedPoints := 0
+	for _, ci := range closed {
+		closedPoints += ci.StoryPoints()
+	}
+	verified, err := s.issueRepo.FindIssuesInState(sprintbot.IssueStateVerified)
+	if err != nil {
+		return nil, errors.Wrap(err, "Status failed could not get issues in state verfied")
+	}
+	for _, ci := range verified {
+		closedPoints += ci.StoryPoints()
+	}
+	status.PointsCompleted = closedPoints
+	stillInProgress, err := s.issueRepo.FindIssuesNotInStates([]string{sprintbot.IssueStateClosed, sprintbot.IssueStateVerified})
+	if err != nil {
+		return nil, errors.Wrap(err, "Status failed could not find issues that are not in state closed ")
+	}
+	openPoints := 0
+	for _, oi := range stillInProgress {
+		openPoints += oi.StoryPoints()
+	}
+	status.PointsRemaining = openPoints
+
+	//maybe move to sync and store in bolt
+	js, err := s.sprintFinder.SprintForBoard(s.sprintName, s.boardName)
+	if err != nil {
+		return nil, errors.Wrap(err, "sprint status failed. Attempted to get sprint "+s.sprintName+" for board "+s.boardName)
+	}
+	t, err := s.TimeCalc(js.StartDate, js.EndDate)
+	if err != nil {
+		return nil, errors.Wrap(err, "Calculating sprint status failed while calculating the time passed and left")
+	}
+	status.Velocity = closedPoints / t.DaysGone
+	f := float64(openPoints / status.Velocity)
+	status.EstimatedDaysWorkRemaining = int(math.Floor(f + .5))
+	status.IssuesRemaining = len(stillInProgress)
+
+	return status, nil
 }

@@ -84,10 +84,12 @@ func main() {
 	if err != nil {
 		logger.Fatalf("failed to open bolt db %s", err)
 	}
-	issueRepo := bolt.NewIssueRepo(db, logger)
+	// only have one decoder right now so use it
+	decoder := &jira.Decoder{}
+	issueRepo := bolt.NewIssueRepo(db, logger, decoder)
 	// sprintService
 	sp := &sprintbot.Sprint{Name: viper.GetString("jira_sprint"), Board: viper.GetString("jira_board")}
-	sprintService := sprint.NewService(issueClient, gitClient, issueRepo, sp, logger)
+	sprintService := sprint.NewService(issueClient, issueClient, gitClient, issueRepo, sp, logger)
 	sprintService.IgnoredRepos = []string{"RHMAPDocsNG", "fhcap", "fh-openshift-templates", "fh-core-openshift-templates"}
 	//chat route
 	{
