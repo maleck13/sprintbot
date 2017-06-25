@@ -146,11 +146,19 @@ func (mr *mockIssueRepo) FindIssuesInState(state string) ([]sprintbot.IssueState
 	mr.called["FindIssuesInState"]++
 	return mr.issues[state], mr.err
 }
-func (mr *mockIssueRepo) FindIssuesNotInState(state string) ([]sprintbot.IssueState, error) {
+func (mr *mockIssueRepo) FindIssuesNotInStates(states []string) ([]sprintbot.IssueState, error) {
+	var contains = func(k string) bool {
+		for _, s := range states {
+			if k == s {
+				return true
+			}
+		}
+		return false
+	}
 	mr.called["FindIssuesNotInState"]++
 	ret := []sprintbot.IssueState{}
 	for k, v := range mr.issues {
-		if k != state {
+		if !contains(k) {
 			for _, i := range v {
 				ret = append(ret, i)
 			}
@@ -343,6 +351,7 @@ func TestSprintSync(t *testing.T) {
 	}
 }
 
+//TODO needs a more advanced test
 func TestSprintStatus(t *testing.T) {
 	cases := []struct {
 		Name         string
@@ -352,6 +361,7 @@ func TestSprintStatus(t *testing.T) {
 		ClosedPoints int
 		Issues       map[string][]sprintbot.IssueState
 		Sprint       *sprintbot.JiraSprint
+		TimeCalc     func(start, end string) (*sprintbot.Time, error)
 	}{
 		{
 			Name:         "test status happy",
@@ -369,6 +379,12 @@ func TestSprintStatus(t *testing.T) {
 				},
 			},
 			Sprint: &sprintbot.JiraSprint{},
+			TimeCalc: func(start, end string) (*sprintbot.Time, error) {
+				return &sprintbot.Time{
+					DaysGone: 2,
+					DaysLeft: 2,
+				}, nil
+			},
 		},
 	}
 
@@ -380,6 +396,7 @@ func TestSprintStatus(t *testing.T) {
 		logger := logrus.StandardLogger()
 		issueRepo := newMockIssueRepo(nil, "", nil, tc.Issues)
 		service := sprint.NewService(isf, sprintFinder, rc, issueRepo, &s, logger)
+		service.TimeCalc = tc.TimeCalc
 		service.IgnoredRepos = []string{"RHMAPDocsNG", "fhcap", "fh-openshift-templates", "fh-core-openshift-templates"}
 		t.Run(tc.Name, func(t *testing.T) {
 			status, err := service.Status()
@@ -398,7 +415,6 @@ func TestSprintStatus(t *testing.T) {
 			if tc.OpenPoints != status.PointsRemaining {
 				t.Fatalf("expected the points open to match got %v and %v ", tc.OpenPoints, status.PointsRemaining)
 			}
-
 		})
 	}
 }

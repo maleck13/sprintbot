@@ -98,17 +98,20 @@ handleStatus(status){
      estimatedDaysWorkRemaining: 0,
      issuesOfInterest: null }
   */
-  console.log(status)
   return [{
-    "title":"Points completed: " + status.pointsCompleted
+    "title":"Points Completed: " + status.pointsCompleted
   },{
-    "title":"Points remaining: " + status.pointsRemaining
+    "title":"Points Remaining: " + status.pointsRemaining
   },
   {
     "title":"Work Days Remaining: " + status.daysRemaining
   },
   {
-    "title":"Sprint velocity: " + status.velocity
+    "title":"Sprint Velocity: " + status.velocity
+  },{
+    "title":"Estimated Days of Work Left: " + status.estimatedDaysWorkRemaining
+  },{
+    "title":"Number of Issues Still Open: " + status.issuesRemaining
   }]
 
 }

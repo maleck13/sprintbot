@@ -471,6 +471,11 @@ type JiraSprintList struct {
 	Values     []*JiraSprint `json:"values"`
 }
 
+type Time struct {
+	DaysLeft int
+	DaysGone int
+}
+
 type JiraSprint struct {
 	CompleteDate  string `json:"completeDate"`
 	EndDate       string `json:"endDate"`
