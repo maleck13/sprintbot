@@ -7,6 +7,7 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/maleck13/sprintbot/pkg/sprintbot"
 	"github.com/pkg/errors"
+	"github.com/google/go-github/github"
 )
 
 const (
@@ -21,7 +22,8 @@ type Service struct {
 	logger            *logrus.Logger
 	issueEditorFinder sprintbot.IssueEditorFinder
 	sprintFinder      sprintbot.SprintFinder
-	repoChecker       sprintbot.RepoChecker
+	githubRepoChecker sprintbot.RepoChecker
+	gitlabRepoChecker sprintbot.RepoChecker
 	boardName         string
 	sprintName        string
 	IgnoredRepos      []string
@@ -31,13 +33,14 @@ type Service struct {
 }
 
 // NewService returns a new  instance of the sprint service
-func NewService(issueEditorFinder sprintbot.IssueEditorFinder, sprintFinder sprintbot.SprintFinder, repoChecker sprintbot.RepoChecker, issueRepo sprintbot.IssueRepo, sp *sprintbot.Sprint, logger *logrus.Logger) *Service {
+func NewService(issueEditorFinder sprintbot.IssueEditorFinder, sprintFinder sprintbot.SprintFinder, githubRepoChecker sprintbot.RepoChecker, gitlabRepoChecker sprintbot.RepoChecker, issueRepo sprintbot.IssueRepo, sp *sprintbot.Sprint, logger *logrus.Logger) *Service {
 	return &Service{
 		logger:            logger,
 		issueEditorFinder: issueEditorFinder,
 		sprintFinder:      sprintFinder,
 		issueRepo:         issueRepo,
-		repoChecker:       repoChecker,
+		githubRepoChecker: githubRepoChecker,
+		gitlabRepoChecker: gitlabRepoChecker,
 		sprintName:        sp.Name,
 		boardName:         sp.Board,
 		IgnoredRepos:      []string{}, // this doesn't feel quite right
@@ -86,9 +89,11 @@ func (s *Service) awaitingPrReview(issues []sprintbot.IssueState) ([]sprintbot.I
 		if len(i.PRS()) == 0 {
 			continue
 		}
+		//TODO logic for checking the gitlab repo
 		for _, pr := range i.PRS() {
 			shouldIgnore := false
-			repo := s.repoChecker.Repo(pr)
+			//TODO Check if pr is gitlab or github.
+			repo := s.githubRepoChecker.Repo(pr)
 			for _, ignore := range s.IgnoredRepos {
 				if ignore == repo {
 					shouldIgnore = true
@@ -97,7 +102,7 @@ func (s *Service) awaitingPrReview(issues []sprintbot.IssueState) ([]sprintbot.I
 			if shouldIgnore {
 				continue
 			}
-			is, err := s.repoChecker.PRReviewed(pr)
+			is, err := s.githubRepoChecker.PRReviewed(pr)
 			if err != nil {
 				return nil, errors.Wrap(err, " sprint service next failed checking if PR is reviewed ")
 			}

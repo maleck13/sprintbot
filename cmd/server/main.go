@@ -12,6 +12,7 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/maleck13/sprintbot/pkg/bolt"
 	"github.com/maleck13/sprintbot/pkg/github"
+	"github.com/maleck13/sprintbot/pkg/gitlab"
 	"github.com/maleck13/sprintbot/pkg/jira"
 	"github.com/maleck13/sprintbot/pkg/sprintbot"
 	"github.com/maleck13/sprintbot/pkg/sprintbot/sprint"
@@ -30,6 +31,7 @@ var (
 	jiraBoard   string
 	jiraSprint  string
 	gitHubToken string
+	gitLabToken string
 	rocketToken string
 	configLoc   string
 )
@@ -57,12 +59,14 @@ func main() {
 	viper.BindEnv("jira_pass")
 	viper.BindEnv("jira_host")
 	viper.BindEnv("github_token")
+	viper.BindEnv("gitlab_token")
 	viper.BindEnv("rocket_token")
 
 	flag.StringVar(&logLevel, "log-level", "info", "use this to set log level: error, info, debug")
 	flag.StringVar(&port, "port", "3000", "set the port to listen on. e.g 3000")
 	flag.StringVar(&configLoc, "config-loc", "/etc/sprintbot", "the dir where to find the config")
 	flag.StringVar(&gitHubToken, "github-token", "", "sets the github token")
+	flag.StringVar(&gitLabToken, "gitlab-token", "", "sets the gitlab token")
 	flag.StringVar(&rocketToken, "rocket-token", "", "sets the rocket chat auth token")
 	flag.Parse()
 	logger = setupLogger()
@@ -72,7 +76,8 @@ func main() {
 		UserName: viper.GetString("jira_user"),
 		Password: viper.GetString("jira_pass"),
 	}
-	gitClient := github.NewClient(viper.GetString("github_token"))
+	gitHubClient := github.NewClient(viper.GetString("github_token"))
+	gitLabClient := gitlab.NewClient(viper.GetString("gitlab_token"))
 	issueClient := jira.NewClient(target)
 	//may want to refactor this
 	_, err := issueClient.Login()
@@ -89,8 +94,8 @@ func main() {
 	issueRepo := bolt.NewIssueRepo(db, logger, decoder)
 	// sprintService
 	sp := &sprintbot.Sprint{Name: viper.GetString("jira_sprint"), Board: viper.GetString("jira_board")}
-	sprintService := sprint.NewService(issueClient, issueClient, gitClient, issueRepo, sp, logger)
-	sprintService.IgnoredRepos = []string{"RHMAPDocsNG", "fhcap", "fh-openshift-templates", "fh-core-openshift-templates"}
+	sprintService := sprint.NewService(issueClient, issueClient, gitHubClient, gitLabClient, issueRepo, sp, logger)
+	sprintService.IgnoredRepos = []string{"fhcap", "fh-openshift-templates", "fh-core-openshift-templates"}
 	//chat route
 	{
 		fmt.Println("sprint set to ", viper.GetString("jira_sprint"), os.Getenv("SB_JIRA_SPRINT"))
