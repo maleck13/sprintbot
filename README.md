@@ -1,17 +1,20 @@
 ## Sprint Bot
 
-A service that watches your sprint gives useful information and integrates with rocket chat.
+A service that watches your sprint, gives useful information and integrates with rocket chat.
 
-Right now it will :
+Current Commands Available:
 
-- It will answer when asked ```sprintbot next```
-
+| Command            | Response                                                                              |
+|--------------------|---------------------------------------------------------------------------------------|
+| sprintbot next     | Tickets that are available next in the Sprint. i.e. Tickets with prs for review       |
+| sprintbot status   | Sprint data e.g. Points Completed/remaining, Sprint velocity, No. of open issues      |
+| sprintbot help     |  Available commands and responses       							                     |
 
 In the future it will:
 
 - It will watch for open pull requests and notify the room
 
--It will allow you to create a distinct log entry that can be seen via the team at ```sprintbot log <today>```
+- It will allow you to create a distinct log entry that can be seen via the team at ```sprintbot log <today>```
 Creating an entry would be ```sprintbot log start mylog``` 
 ...
 ... ```sprintbot log commit mylog ```
@@ -28,7 +31,7 @@ docker run --name rocketchats -p 3001:3000 --env ROOT_URL=http://localhost --lin
 ```
 See original steps @ [dockerhub](https://hub.docker.com/_/rocket.chat/)
 
-### set up rocket web hook
+### Set up rocket web hook
 
 Take the following steps to set-up the rocket web hook:
 
@@ -39,11 +42,11 @@ Take the following steps to set-up the rocket web hook:
 - Set the following
   - Enabled to True
   - Select the channel where the sprintbot will be used
-  - Paste to URLs: http://sprintbots:3001/chat/message?source=rocket
+  - Paste to URLs: http://sprintbots:3000/chat/message?source=rocket
   - Make note of the rocket token for use below
   - Copy `integrations/rocket/script.js` to Script
 
-### Run sprintbot
+### Set Up sprintbot
 
 * Clone the repo and run:
 
@@ -52,7 +55,7 @@ cd cmd/server
 export GOOS=linux; go build .
 docker build -t sprintbot:latest .
 ```
-* export the required env vars
+* export the required env vars or add them to your `~/.bashrc` file
 
 ```
 export JIRA_USER=your_jira_username
@@ -66,3 +69,10 @@ export ROCKET_TOKEN=rocket_token
 ```
 ./start.sh <image-hash>
 ```
+
+You will now have a local development environment. To view logs from rocketchat run:
+```
+ docker logs -f <container-id>
+```
+
+![Local Development Logs](images/debug.png?raw=true)
