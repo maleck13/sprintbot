@@ -11,6 +11,7 @@
       "jira_sprint":"${JIRA_SPRINT}",
       "jira_board":"${JIRA_BOARD}",
       "github_token":"${GITHUB_TOKEN}",
+      "gitlab_token":"${GITLAB_TOKEN}",
       "rocket_token":"${ROCKET_TOKEN}"
   }
 }

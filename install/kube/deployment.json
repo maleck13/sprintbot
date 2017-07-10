@@ -74,6 +74,15 @@
                 }
             },
             {
+              "name":"SB_GITLAB_TOKEN",
+              "valueFrom":{
+                "configMapKeyRef":{
+                  "name":"config",
+                  "key":"gitlab_token"
+                }
+              }
+            },
+            {
                 "name":"SB_ROCKET_TOKEN",
                 "valueFrom":{
                     "configMapKeyRef":{

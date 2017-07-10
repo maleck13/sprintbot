@@ -61,6 +61,7 @@ docker build -t sprintbot:latest .
 export JIRA_USER=your_jira_username
 export JIRA_PASS=your_jira_password
 export GITHUB_TOKEN=github_token
+export GITLAB_TOKEN=gitlab_token
 export ROCKET_TOKEN=rocket_token
 ```
 
